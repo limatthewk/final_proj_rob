@@ -1,0 +1,62 @@
+<launch>
+
+  <node pkg="ml_strategy_students"
+    type="ml_strategy_students"
+    name="wizard_strategy"
+    output="screen">
+
+    <!-- List of team quad names (first one is goalkeeper) -->
+    <rosparam param="MyTeam"> ["harry",
+                               "hermione",
+                               "ron"] </rosparam>
+
+    <!-- Initial position quads (meters) -->
+    <rosparam param="InitialPosition"> [-6.0,  0.0, 2.0,
+                                        -6.0, -1.5, 1.1,
+                                        -6.0,  1.5, 1.2] </rosparam>
+    <!-- Initial yaw quads (radians) -->
+    <rosparam param="InitialYaw"> [0.0,
+                                   0.0,
+                                   0.0] </rosparam>
+
+    <!-- Balloon positions -->
+    <rosparam param="TeamBalloon"> [-7.5, 0.0, 2.0] </rosparam>
+    <rosparam param="EnemyBalloon"> [7.5, 0.0, 2.0] </rosparam>
+
+
+    <!-- Dynamic parameters -->
+    <rosparam param="max_acceleration"> 3.0 </rosparam>
+    <rosparam param="max_velocity"> 2.5 </rosparam>
+
+  </node>
+  
+  <node pkg="ml_strategy"
+    type="ml_strategy"
+    name="beast_strategy"
+    output="screen">
+
+    <!-- List of team quad names (first one is goalkeeper) -->
+    <rosparam param="MyTeam"> ["phoenix",
+                               "valkyrie",
+                               "hippogryph"] </rosparam>
+
+    <!-- Initial position/yaw of the quads -->
+    <rosparam param="InitialPosition"> [6.0,  0.0, 2.0,
+                                        6.0, -1.5, 1.2,
+                                        6.0,  1.5, 1.1] </rosparam>
+    <rosparam param="InitialYaw"> [3.1415,
+                                   3.1415,
+                                   3.1415] </rosparam>
+
+    <!-- Balloon positions -->
+    <rosparam param="TeamBalloon"> [7.5, 0.0, 2.0] </rosparam>
+    <rosparam param="EnemyBalloon"> [-7.5, 0.0, 2.0] </rosparam>
+
+
+    <!-- Dynamic parameters -->
+    <rosparam param="max_acceleration"> 3.0 </rosparam>
+    <rosparam param="max_velocity"> 2.5 </rosparam>
+
+  </node>
+
+</launch>
