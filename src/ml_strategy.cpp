@@ -1,6 +1,21 @@
 
 #include "ml_strategy/globals.h"
 
+
+
+
+// roscore
+// roslaunch mediation_layer mediationLayer_withDynamics.launch
+// roslaunch ml_strategy_students play_against_marcelino.launch
+// cd ~/catkin_ws && catkin_make
+
+
+
+// source ~/catkin_ws/install/setup.bash && cd ~/Tournament_Files && roslaunch mediationLayer_withDynamics.launch
+// source ~/catkin_ws/install/setup.bash && cd ~/Tournament_Files && roslaunch 09_overdogs_vs_underdogs.launch
+// cd ~/catkin_ws && catkin_make install && source ~/catkin_ws/install/setup.bash && cd ~/Tournament_Files && roslaunch 09_overdogs_vs_underdogs.launch
+
+
 // Global variables--------------------------
 globalVariables globals_;
 mutexClass mutexes_;
@@ -54,9 +69,9 @@ int main(int argc, char** argv){
 			     role_struct.OFFENSIVE_CENTRAL};
 	} else if(quad_names.size() == 3) {
 		roles = {role_struct.GOALKEEPER,
-			     //role_struct.OFFENSIVE_RIGHT,
-				 role_struct.OFFENSIVE_RIGHT,
-			     //role_struct.OFFENSIVE_LEFT
+					role_struct.GOALKEEPER,
+				 //role_struct.OFFENSIVE_RIGHT,
+			     //role_struct.OFFENSIVE_LEFT,
 				role_struct.OFFENSIVE_LEFT	};
 	} else {
 		roles.resize(quad_names.size());
