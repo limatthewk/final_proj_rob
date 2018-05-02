@@ -10,7 +10,7 @@ TeamStrategy::TeamStrategy() {
 TeamStrategy::TeamStrategy(const double max_vel,
  	                       const double max_acc,
 		 		           const Eigen::Vector3d team_balloon,
-		 		           const Eigen::Vector3d enemy_balloon) {
+		 		           const Eigen::Vector3d enemy_balloon) { 	
 	max_vel_ = max_vel;
 	max_acc_ = max_acc;
 	team_balloon_ = team_balloon;
@@ -496,71 +496,46 @@ void TeamStrategy::OffensiveAdvance(const std::set<QuadData>::iterator &it,
 		
 		float dist_quad2enemy = sqrt(pow(vec_quad2enemy[0],2.0)+pow(vec_quad2enemy[1],2.0)+pow(vec_quad2enemy[2],2.0));
 		float e_vel_mag = sqrt(pow(e_vel[0],2.0)+pow(e_vel[1],2.0)+pow(e_vel[2],2.0));
+		float vel_mag = sqrt(pow(vel[0],2.0)+pow(vel[1],2.0)+pow(vel[2],2.0));
 
-		//if (vec_quad2balloon[0] < 0){
-		if (e_vel_mag < 1.5){
-			if ( dist_quad2enemy < 5.5 ){
+		//if (e_vel_mag < 1.5 && vel_mag > 1.5 && dist_quad2enemy < 6){
+		if (e_vel_mag < 1.5 && dist_quad2enemy < 6){
+			if(it->role.State == it->role.OFFENSIVE_LEFT){
 				vec << 0,15,0;
-				std::cout << "enemy is blocking1" << std::endl;
-				std::cout << e_vel_mag << std::endl;
-				std::cout << vel << std::endl;
-				/*
-				if (e_vel_mag < .35 && abs(vel[0]) < 1.8){
+			}
+			else if(it->role.State == it->role.OFFENSIVE_RIGHT){
+				vec << 0,-15,0;
+			}
+				std::cout << "enemy is blocking" << std::endl<<std::endl;
+				std::cout << "enemy vel mag " << e_vel_mag << std::endl << std::endl;
+				std::cout << "enemy velocity" << std::endl << e_vel << std::endl << std::endl;
+				std::cout << "quad velocity" << std::endl << vel << std::endl << std::endl;
+
+
+
+				
+				if ((e_vel_mag < .2) && (fabs(vel[0]) < 1.8)){
+
 					it->role.AttackState.State = it->role.AttackState.BALLOON;
 					balloon_targeted_ = true;
-				}*/
-			}
-
-		}
-		
-		//}
-		/*
-		else if (vec_quad2balloon[0] > 0){
-			if (e_vel_mag < 1.5){
-				if ( dist_quad2enemy < 5.5 ){
-					vec << 0,15,0;
-					std::cout << "enemy is blocking1" << std::endl;
-					std::cout << e_vel_mag << std::endl;
-					std::cout << vel << std::endl;
-					
-					if (e_vel_mag < .35 && vel[0] < 1.8){
-						it->role.AttackState.State = it->role.AttackState.BALLOON;
-						balloon_targeted_ = true;
-					}
 				}
+		}
+	}
 
-			}
 		
-		}*/
-}
+		
 	
-	//std::cout<< vec << std::endl;
-
-
-
-	
-	/*
-	if (vec_quad2balloon[0] < 0){
-		vec << -5,-5,-5;
-
-
-	}
-	else{
-		vec << 5,5,5;
-	}
-*/
-
 
 	
 	// Force leading towards enemy balloon plane
-	Eigen::Vector3d ref_vel = max_vel_*vec_quad2balloon;
-	Eigen::Vector3d ref_acc = kd*(ref_vel - vel);
+	Eigen::Vector3d ref_vel = max_vel_*((enemy_balloon_ - pos).normalized());
+	Eigen::Vector3d ref_acc = kd*(ref_vel - vel)+vec;
 
 	// Set position reference as current, update rk4 based on
 	// velocity error
 	it->reference_integrator.SetPos(pos);
 	//std::cout << ref_acc+vec << std::endl << std::endl;
-	it->reference_integrator.UpdateStates(ref_acc+vec, dt);
+	it->reference_integrator.UpdateStates(ref_acc, dt);
 
 	it->reference = this->GetRefRk4(it, dt);
 }
