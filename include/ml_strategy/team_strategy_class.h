@@ -22,6 +22,19 @@ class AttackStates{
 
 	uint State = ADVANCING;
 };
+
+//Pusher states
+class PushStates{
+ public:
+    uint IMPACTING=1;
+    uint FOLLOWING=2;
+    uint RETREAT=3;
+    uint State=IMPACTING;
+    std::string target_name="";
+
+};
+
+
 // Defensive states
 class DefenseStates{
  public:
@@ -29,6 +42,8 @@ class DefenseStates{
 	uint TARGETING = 1;  // Targeting an enemy
 	uint RETURNING = 2;  // Returning home?
     uint FORWARD=3;
+    uint PUSHING=4;
+
 	uint State = STEADY;
 	std::string target_name = "";
 };
@@ -43,11 +58,18 @@ class QuadRole{
 	uint OFFENSIVE_RIGHT = 4;
 	uint OFFENSIVE_LEFT = 5;
 	uint OFFENSIVE_CENTRAL = 6;
+    uint PUSHER=7;
+
+
 
 	uint State = GOALKEEPER;
 	AttackStates AttackState;
 	DefenseStates DefenseState;
+    PushStates PushState;
+
 };
+
+
 
 // Enemy danger assignment
 class EnemyDanger{
@@ -69,6 +91,9 @@ class QuadState{
 
 class QuadData {
  public:
+    
+    std::string last_target_name;
+
     std::string name;                            // Unique name for vehicle
     mutable QuadState quad_state;                // Measured quad states
     mutable QuadRole role;					     // Quad role in the team
@@ -137,18 +162,28 @@ class TeamStrategy {
     	               std::set<QuadData>::iterator *index);  // Returns -1 if it can't find
 	void FindEnemyIndex(const std::string &name,
                 		std::set<EnemyData>::iterator *index);
+    std::string FindClosestEnemy(const std::string &quad_name,
+                       std::set<EnemyData>::iterator *itEnemyClosest);
+    std::string  FindClosestUntargetedEnemy(const std::string &quad_name,
+                                std::set<EnemyData>::iterator *itEnemyClosest);
+    void FindClosestEnemytoBalloon(std::set<EnemyData>::iterator *itEnemyClosest);
     void PublishReferences();
 
     // Functions to update enemy danger
     void EnemyDangerUpdate();
     void GetDangerousEnemies(std::vector<std::string> *names,
                              std::vector<std::set<EnemyData>::iterator> *iterators);
+    void GetWarningEnemies(std::vector<std::string> *names,
+                        std::vector<std::set<EnemyData>::iterator> *iterators);
+
+
 
     // Rules to update defensive and offensive state machines
     void UpdateAttDefStateMachine();
     void UpdateOffensive(const std::set<QuadData>::iterator &it,
                        const std::set<EnemyData>::iterator &itEnemies);
     void UpdateDefensive(const std::set<QuadData>::iterator &it);
+    void UpdatePusher(const std::set<QuadData>::iterator &it);
 
     // Strategy-dependent methods
     void UpdateReferences(const double &dt);
@@ -171,6 +206,11 @@ class TeamStrategy {
 	                        const double &dt);
 	void DefensiveReturn(const std::set<QuadData>::iterator &it,
 	                     const double &dt);
+    void PusherImpacting(const std::set<QuadData>::iterator &it,
+                                   const double &dt);
+    void PusherRetreating(const std::set<QuadData>::iterator &it,
+                                   const double &dt);
+
 
 
 };

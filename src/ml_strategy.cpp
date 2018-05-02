@@ -69,10 +69,10 @@ int main(int argc, char** argv){
 			     role_struct.OFFENSIVE_CENTRAL};
 	} else if(quad_names.size() == 3) {
 		roles = {role_struct.GOALKEEPER,
-					role_struct.GOALKEEPER,
+					role_struct.PUSHER,
 				 //role_struct.OFFENSIVE_RIGHT,
 			     //role_struct.OFFENSIVE_LEFT,
-				role_struct.OFFENSIVE_LEFT	};
+				role_struct.OFFENSIVE_RIGHT	};
 	} else {
 		roles.resize(quad_names.size());
 	}

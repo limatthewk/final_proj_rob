@@ -10,7 +10,7 @@ TeamStrategy::TeamStrategy() {
 TeamStrategy::TeamStrategy(const double max_vel,
  	                       const double max_acc,
 		 		           const Eigen::Vector3d team_balloon,
-		 		           const Eigen::Vector3d enemy_balloon) { 	
+		 		           const Eigen::Vector3d enemy_balloon) {
 	max_vel_ = max_vel;
 	max_acc_ = max_acc;
 	team_balloon_ = team_balloon;
@@ -173,6 +173,9 @@ void TeamStrategy::EnemyDangerUpdate() {
 			it->danger.State = it->danger.NEUTRAL;
 		}
 	}
+
+
+
 }
 
 void TeamStrategy::GetDangerousEnemies(std::vector<std::string> *names,
@@ -189,23 +192,19 @@ void TeamStrategy::GetDangerousEnemies(std::vector<std::string> *names,
 	}
 }
 
-/*
-void TeamStrategy::GetDangerousDefenders(std::vector<std::string> *names,
+void TeamStrategy::GetWarningEnemies(std::vector<std::string> *names,
 	                                   std::vector<std::set<EnemyData>::iterator> *iterators) {
 	std::set<EnemyData>::iterator it;
-	//only iterate the defenders
 	for(it = enemies_.begin(); it != enemies_.end(); ++it) {
-		if(it->danger.State == it->danger.DANGER) {
+		if(it->danger.State == it->danger.WARNING) {
 			// Only return enemies that are not being targeted by teammates
-			if(!it->targeted) {
+		//	if(!it->targeted) {
 				names->push_back(it->name);
 				iterators->push_back(it);
-			}
+		//	}
 		}
 	}
 }
-*/
-
 
 // Rules to update defensive and offensive state machine
 void TeamStrategy::UpdateAttDefStateMachine() {
@@ -225,8 +224,72 @@ void TeamStrategy::UpdateAttDefStateMachine() {
 				  (it->role.State == it->role.OFFENSIVE_LEFT) ||
 				  (it->role.State == it->role.OFFENSIVE_CENTRAL)) {
 			this->UpdateOffensive(it,itEnemies);
+		}else if(it->role.State == it->role.PUSHER) {
+			this->UpdatePusher(it);
+
 		}
 	}
+}
+
+void TeamStrategy::UpdatePusher(const std::set<QuadData>::iterator &it) {
+	std::string my_name=it->name;
+	//iterators for my quads and the enemy's
+	std::set<QuadData>::iterator itQuads;
+	std::set<EnemyData>::iterator itEnemyClosest;
+	//std::string enemyName=this->FindClosestUntargetedEnemy(my_name,&itEnemyClosest);
+	std::string enemyName=this->FindClosestEnemy(my_name,&itEnemyClosest);
+	this->FindEnemyIndex(enemyName,&itEnemyClosest);
+	//Analyze if collision has occured
+	if(it->role.PushState.State == it->role.PushState.IMPACTING) {
+		//if(it->role.PushState.target_name==""){//THE TARGETS SHOULD BE LOCKED, and not changed during iterations of the program
+			//Assign my target
+		  it->role.PushState.target_name=enemyName;
+		   	//Modify the enemy quads so it is targeted=true
+	   		itEnemyClosest->targeted=true;			
+		//}		
+	   	//Analyze if I have collided against my targeted enemy
+	   	std::set<EnemyData>::iterator itClosest;
+	   	this->FindClosestEnemy(my_name,&itClosest);
+		Eigen::Vector3d pos_target = itClosest->quad_state.position;
+		Eigen::Vector3d vel_target = itClosest->quad_state.velocity;
+		Eigen::Vector3d pos = it->quad_state.position;
+		Eigen::Vector3d vel = it->quad_state.velocity;
+		double dist_quad_enemy=(pos-pos_target).norm();
+		double dThreshold=0.1;
+		double vThreshold=0.2;
+		double radRetreat=3;
+
+		Eigen::Vector3d unitVel=vel.normalized();
+		Eigen::Vector3d unitTeamBalloon=team_balloon_.normalized();
+
+		if( ( (unitVel(0)<0) &&(unitTeamBalloon(0)<0)&&((pos-team_balloon_).norm()>radRetreat) ) 
+			|| (  (unitVel(0)>0) &&(unitTeamBalloon(0)>0) )&&((pos-team_balloon_).norm()>radRetreat)){
+
+			//unassigning targets shouldn't be necessary since that will happen automatically
+			//Unassign my target
+			it->role.PushState.target_name="";
+			//Make enemy targeted=false!!!
+			this->FindEnemyIndex(enemyName,&itEnemyClosest);
+			itEnemyClosest->targeted=false;		
+			it->role.PushState.State = it->role.PushState.RETREAT;
+			//std::cout<<"Retreating"<<std::endl;
+	
+		}	
+	}
+
+	if(it->role.PushState.State == it->role.PushState.RETREAT) {	
+	//std::cout<<"non plus ultra"<<std::endl;
+	//untarget the bois
+		//if I  am y= b, then I go back to impacting
+		Eigen::Vector3d pos = it->quad_state.position;
+		double radDef=2;
+		if((pos-team_balloon_).norm()<radDef){
+			it->role.PushState.State = it->role.PushState.IMPACTING;
+		}
+
+
+	}
+
 }
 
 void TeamStrategy::UpdateOffensive(const std::set<QuadData>::iterator &it,
@@ -266,67 +329,6 @@ void TeamStrategy::UpdateOffensive(const std::set<QuadData>::iterator &it,
 			balloon_popped_ = true;
 		}
 	}
-	
-	/*
-	// If it gets stucked against a defender
-	if(it->role.AttackState.State == it->role.AttackState.ADVANCING) {
-
-		//FInding our attacker state
-		Eigen::Vector3d pos ;
-		Eigen::Vector3d vel ;
-
-		std::set<QuadData>::iterator it_attacker;
-		std::set<QuadData>::iterator it2;
-
-
-		for(it2 = quads_.begin(); it2 != quads_.end(); ++it2)  {
-			if(it2->role.State == it->role.OFFENSIVE_LEFT){
-				it_attacker=it2;
-			}
-		}
-
-		pos=it_attacker->quad_state.position;
-		vel = it_attacker->quad_state.velocity;
-		//std::cout<<it_attacker->name<<std::endl;
-		//std::cout<<"our attacker's position"<<std::endl;
-		//std::cout<<pos<<std::endl;
-	
-		
-		//Finding enemy defender state
-
-		Eigen::Vector3d posDef;
-		Eigen::Vector3d velDef ;
-
-		std::set<EnemyData>::iterator it_defender;
-		std::set<EnemyData>::iterator itEnemies2;
-	
-
-	for(itEnemies2 = enemies_.begin(); itEnemies2 != enemies_.end(); ++itEnemies2)  {
-		posDef=itEnemies2->quad_state.position;
-		velDef=itEnemies2->quad_state.velocity;
-
-		Eigen::Vector3d distanceAD=pos-posDef;
-
-
-		if((distanceAD.norm()<0.8)&&(velDef.norm()<0.5)){
-			//std::cout<<"our attacker is returning home"<<std::endl;
-			it->role.AttackState.State = it->role.AttackState.BACK;
-
-			}
-	}
-
-		//std::cout<<"Enemy defender position"<<std::endl;
-		//std::cout<<posDef<<std::endl;
-	}
-
-		// If it gets stucked against a defender
-	//if(it->role.AttackState.State == it->role.AttackState.BACK) {
-
-
-
-	//}
-*/
-
 }
 
 
@@ -334,36 +336,42 @@ void TeamStrategy::UpdateDefensive(const std::set<QuadData>::iterator &it) {
 	std::vector<std::string> dangerous_quads;
 	std::vector<std::set<EnemyData>::iterator> dangerous_iterator;
 	this->GetDangerousEnemies(&dangerous_quads, &dangerous_iterator);
+	// Keep quad steady at its initial position until a dangerous
+	// enemy is seen
+	if(it->role.DefenseState.State == it->role.DefenseState.STEADY) {
+		if(dangerous_quads.size() > 0) {
+			it->role.DefenseState.State = it->role.DefenseState.TARGETING;
+			it->role.DefenseState.target_name = dangerous_quads[0];
+			dangerous_iterator[0]->targeted = true;
+		}
+	}
 
-// Keep quad steady at its initial position until a dangerous
-// enemy is seen
-if(it->role.DefenseState.State == it->role.DefenseState.STEADY) {
-if(dangerous_quads.size() > 0) {
-it->role.DefenseState.State = it->role.DefenseState.TARGETING;
-it->role.DefenseState.target_name = dangerous_quads[0];
-dangerous_iterator[0]->targeted = true;
-}
-}
-
-// If targeting an enemy, track him until enemy is no longer dangerous
-if(it->role.DefenseState.State == it->role.DefenseState.TARGETING) {
-std::set<EnemyData>::iterator it_target;
-FindEnemyIndex(it->role.DefenseState.target_name, &it_target);
-if (it_target->danger.State == it_target->danger.NEUTRAL) {
-it->role.DefenseState.State = it->role.DefenseState.RETURNING;
-it->role.DefenseState.target_name = "";
-it_target->targeted = false;
-}
-}
+	// If targeting an enemy, track him until enemy is no longer dangerous
+	if(it->role.DefenseState.State == it->role.DefenseState.TARGETING) {
+		std::set<EnemyData>::iterator itClosest;
+		std::set<EnemyData>::iterator it_target;
+		///////Update with the closest attacker TESTING
+		std::string my_name=it->name;
+		//std::string enemyName=this->FindClosestUntargetedEnemy(my_name,&itEnemyClosest);
+		std::string enemyName=this->FindClosestEnemy(my_name,&itClosest);
+		it->role.DefenseState.target_name=enemyName;
+		////
+		FindEnemyIndex(it->role.DefenseState.target_name, &it_target);
+		if (it_target->danger.State == it_target->danger.NEUTRAL) {
+			it->role.DefenseState.State = it->role.DefenseState.RETURNING;
+			it->role.DefenseState.target_name = "";
+			it_target->targeted = false;
+		}
+	}
 
 
-// If ended targeting an enemy, return to initial position
-if(it->role.DefenseState.State == it->role.DefenseState.RETURNING) {
-Eigen::Vector3d pos = it->quad_state.position;
-if((it->init_pos - pos).norm() < 0.5) { // Close to initial position
-it->role.DefenseState.State = it->role.DefenseState.STEADY;
-}
-}
+	// If ended targeting an enemy, return to initial position
+	if(it->role.DefenseState.State == it->role.DefenseState.RETURNING) {
+		Eigen::Vector3d pos = it->quad_state.position;
+		if((it->init_pos - pos).norm() < 0.5) { // Close to initial position
+			it->role.DefenseState.State = it->role.DefenseState.STEADY;
+		}
+	}
 
 	
 }
@@ -388,6 +396,10 @@ void TeamStrategy::UpdateReferences(const double &dt) {
 			else if(it->role.DefenseState.State == it->role.DefenseState.FORWARD) {
 				this->DefensiveForward(it, dt);
 			}
+			else if(it->role.DefenseState.State == it->role.DefenseState.PUSHING) {
+				this->PusherImpacting(it, dt);
+			}
+			//	this->PusherImpacting();
 			//-----------------
 		
 		} else if((it->role.State == it->role.OFFENSIVE_RIGHT) ||
@@ -400,7 +412,18 @@ void TeamStrategy::UpdateReferences(const double &dt) {
 			} else if(it->role.AttackState.State == it->role.AttackState.BALLOON) {
 				this->OffensiveBalloon(it, dt);
 			}
+		}else if(it->role.State == it->role.PUSHER)  {
+			if(it->role.PushState.State == it->role.PushState.IMPACTING) {
+				//std::cout<<"im impacting!"<<std::endl;
+				//std::cout<<"my velx is"<< it->quad_state.velocity.normalized()<<std::endl;
 
+				this->PusherImpacting(it,dt);
+			}else if(it->role.PushState.State ==it->role.PushState.RETREAT) {
+				this->PusherRetreating(it,dt);
+				
+			}
+
+// it->role.PushState.RETREAT
 		}
 	}
 }
@@ -455,9 +478,6 @@ void TeamStrategy::OffensiveReturn(const std::set<QuadData>::iterator &it,
 void TeamStrategy::OffensiveAdvance(const std::set<QuadData>::iterator &it,
 	                                const double &dt) {
 	double kd = 2.0;
-
-
-
 	// Find nearest point in balloon plane
 	Eigen::Vector3d pos = it->quad_state.position;
 	Eigen::Vector3d vel = it->quad_state.velocity;
@@ -509,11 +529,7 @@ void TeamStrategy::OffensiveAdvance(const std::set<QuadData>::iterator &it,
 				std::cout << "enemy is blocking" << std::endl<<std::endl;
 				std::cout << "enemy vel mag " << e_vel_mag << std::endl << std::endl;
 				std::cout << "enemy velocity" << std::endl << e_vel << std::endl << std::endl;
-				std::cout << "quad velocity" << std::endl << vel << std::endl << std::endl;
-
-
-
-				
+				std::cout << "quad velocity" << std::endl << vel << std::endl << std::endl;	
 				if ((e_vel_mag < .2) && (fabs(vel[0]) < 1.8)){
 
 					it->role.AttackState.State = it->role.AttackState.BALLOON;
@@ -521,12 +537,6 @@ void TeamStrategy::OffensiveAdvance(const std::set<QuadData>::iterator &it,
 				}
 		}
 	}
-
-		
-		
-	
-
-	
 	// Force leading towards enemy balloon plane
 	Eigen::Vector3d ref_vel = max_vel_*((enemy_balloon_ - pos).normalized());
 	Eigen::Vector3d ref_acc = kd*(ref_vel - vel)+vec;
@@ -675,4 +685,128 @@ void TeamStrategy::DefensiveReturn(const std::set<QuadData>::iterator &it,
 	}
 
 	it->reference = this->GetRefRk4(it, dt);
+}
+
+void TeamStrategy::PusherImpacting(const std::set<QuadData>::iterator &it,
+	                               const double &dt) {
+
+	double kd = 5.0, kp1 = 2.0;
+	// Get current position/velocity of vehicle
+	Eigen::Vector3d pos = it->quad_state.position;
+	Eigen::Vector3d vel = it->quad_state.velocity;
+
+	//Getting MY TARGETED ENEMY information
+	std::string enemyName=it->role.PushState.target_name;
+
+	std::set<EnemyData>::iterator itEnemyClosest;
+    this->FindEnemyIndex(enemyName,&itEnemyClosest);
+	Eigen::Vector3d pos_target = itEnemyClosest->quad_state.position;
+	Eigen::Vector3d vel_target = itEnemyClosest->quad_state.velocity;
+    // Vector from quad to its targeted enemy
+	Eigen::Vector3d vec_quad2enemy_pos = (pos_target - pos);
+	Eigen::Vector3d ref_vel = max_vel_*vec_quad2enemy_pos.normalized();
+	Eigen::Vector3d ref_acc = kd*(ref_vel - vel);
+	it->reference_integrator.SetPos(pos);
+	it->reference_integrator.UpdateStates(ref_acc, dt);
+	it->reference = this->GetRefRk4(it, dt);
+
+}
+
+void TeamStrategy::PusherRetreating(const std::set<QuadData>::iterator &it,
+	                               const double &dt) {
+
+	double kd = 5.0, kp1 = 2.0;
+	// Get current position/velocity of vehicle
+	Eigen::Vector3d pos = it->quad_state.position;
+	Eigen::Vector3d vel = it->quad_state.velocity;
+
+	//Getting MY TARGETED ENEMY information
+	std::string enemyName=it->role.PushState.target_name;
+
+    Eigen::Vector3d offset_offensive = Eigen::Vector3d( 5.0, 0.0, 0.0);
+	Eigen::Vector3d pos_target =team_balloon_+offset_offensive;
+
+
+    // Vector from quad to its targeted enemy
+	Eigen::Vector3d vec_quad2enemy_pos = (pos_target - pos);
+	Eigen::Vector3d ref_vel = max_vel_*vec_quad2enemy_pos.normalized();
+	Eigen::Vector3d ref_acc = kd*(ref_vel - vel);
+	it->reference_integrator.SetPos(pos);
+	it->reference_integrator.UpdateStates(ref_acc, dt);
+	it->reference = this->GetRefRk4(it, dt);
+
+}
+
+
+
+std::string TeamStrategy::FindClosestEnemy(const std::string &quad_name,
+					 std::set<EnemyData>::iterator *itEnemyClosest){
+	 //This function receives our quad name and "returns"
+	 //a pointer to the enemy closest quad
+	std::set<QuadData>::iterator it;
+	std::string enemy_name;
+	this->FindQuadIndex(quad_name,&it);
+
+	Eigen::Vector3d pos = it->quad_state.position;
+    //comparison variables
+	double distMin=300;
+	//find closest enemy
+	std::set<EnemyData>::iterator itEnemy;
+
+	for(itEnemy = enemies_.begin(); itEnemy != enemies_.end(); ++itEnemy) {
+		if( ((itEnemy->quad_state.position-pos).norm())<distMin ) {
+			distMin=(itEnemy->quad_state.position-pos).norm();
+			enemy_name=itEnemy->name;
+		}
+	}
+	EnemyData enemy_with_name;
+	enemy_with_name.name=enemy_name;
+	*itEnemyClosest=enemies_.find(enemy_with_name);
+	return enemy_name;
+
+}
+
+std::string TeamStrategy::FindClosestUntargetedEnemy(const std::string &quad_name,
+					 			std::set<EnemyData>::iterator *itEnemyClosest){//returns enemy name
+	 //This function receives our quad name and "returns"
+	 //a pointer to the enemy closest untargeted quad
+	std::set<QuadData>::iterator it;
+	std::string enemy_name;
+	this->FindQuadIndex(quad_name,&it);
+
+	Eigen::Vector3d pos = it->quad_state.position;
+    //comparison variables
+	double distMin=300;
+	//find closest enemy
+	std::set<EnemyData>::iterator itEnemy;
+
+	for(itEnemy = enemies_.begin(); itEnemy != enemies_.end(); ++itEnemy) {
+		if( ((itEnemy->quad_state.position-pos).norm())<distMin ) {
+			if(!itEnemy->targeted){
+				distMin=(itEnemy->quad_state.position-pos).norm();
+				enemy_name=itEnemy->name;				
+			}
+
+		}
+	}
+	EnemyData enemy_with_name;
+	enemy_with_name.name=enemy_name;
+	*itEnemyClosest=enemies_.find(enemy_with_name);
+	return enemy_name;
+}
+
+void TeamStrategy::FindClosestEnemytoBalloon(std::set<EnemyData>::iterator *itEnemyClosest){
+
+	std::string enemy_name;
+	double distMin=300;
+	std::set<EnemyData>::iterator itEnemy;
+	for(itEnemy = enemies_.begin(); itEnemy != enemies_.end(); ++itEnemy) {
+		if( ((itEnemy->quad_state.position-	enemy_balloon_).norm())<distMin ) {
+			distMin=(itEnemy->quad_state.position-enemy_balloon_).norm();
+			enemy_name=itEnemy->name;
+		}
+	}
+	EnemyData enemy_with_name;
+	enemy_with_name.name=enemy_name;
+	*itEnemyClosest=enemies_.find(enemy_with_name);
 }
