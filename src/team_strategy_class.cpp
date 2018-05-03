@@ -481,8 +481,6 @@ void TeamStrategy::OffensiveAdvance(const std::set<QuadData>::iterator &it,
 	// Find nearest point in balloon plane
 	Eigen::Vector3d pos = it->quad_state.position;
 	Eigen::Vector3d vel = it->quad_state.velocity;
-    
-    Eigen::Vector3d nearest_point;		
 
 	// Vector from quad to enemy balloon plane
 	//Eigen::Vector3d vec;
@@ -499,11 +497,12 @@ void TeamStrategy::OffensiveAdvance(const std::set<QuadData>::iterator &it,
 	Eigen::Vector3d vec_quad2balloon =(enemy_balloon_ - pos).normalized();
 	Eigen::Vector3d dist_quad2balloon =enemy_balloon_ - pos;
 	float dist_quad2balloon_m = sqrt(pow(dist_quad2balloon[0],2.0)+pow(dist_quad2balloon[1],2.0)+pow(dist_quad2balloon[2],2.0));
-	//std::cout << vec_quad2balloon << std::endl;
-	//std::cout << std::abs(dist_quad2balloon[0]) << std::endl;
 
 	Eigen::Vector3d vec;
 	vec << 0,0,0;
+
+	float test[3] = {};
+	int i = 0;
 
 	
 	std::set<EnemyData>::iterator it2;
@@ -513,52 +512,48 @@ void TeamStrategy::OffensiveAdvance(const std::set<QuadData>::iterator &it,
 
 		// Vector from quad to team balloon
 		Eigen::Vector3d vec_quad2enemy = pos - e_pos;
-		Eigen::Vector3d test = vec_quad2enemy.normalized()-vec_quad2balloon;
-		//std::cout << vec_quad2enemy << std::endl<<std::endl;
 		
 		float dist_quad2enemy = sqrt(pow(vec_quad2enemy[0],2.0)+pow(vec_quad2enemy[1],2.0)+pow(vec_quad2enemy[2],2.0));
 		float e_vel_mag = sqrt(pow(e_vel[0],2.0)+pow(e_vel[1],2.0)+pow(e_vel[2],2.0));
-		//float vel_mag = sqrt(pow(vel[0],2.0)+pow(vel[1],2.0)+pow(vel[2],2.0));
 
 		Eigen::Vector3d pos_dif = pos - e_pos;
-		float pos_dif_mag = sqrt(pow(pos_dif[0],2.0)+pow(pos_dif[1],2.0)+pow(pos_dif[2],2.0));
 
 		if (e_vel_mag < 2 && dist_quad2enemy < 2.5){
-			/*
-			if(it->role.State == it->role.OFFENSIVE_LEFT){
-				vec << 0,15,0;
-			}
-			else if(it->role.State == it->role.OFFENSIVE_RIGHT){
-				vec << 0,-15,0;
-				*/
-			//if (e_vel[1]>0 && pos_dif[1]>0){
+
 			if (vel[1] > e_vel[1]){
-				std::cout << "pos vec" << std:: endl;
+				//std::cout << "pos vec" << std:: endl;
 				vec << 0,5,0;
 			
 			}
-			//if (e_vel[1]<0 && pos_dif[1]<0){
 			if (vel[1] < e_vel[1]){
 				vec << 0,-5,0;
-				std::cout << "neg vec" << std:: endl;
+				//std::cout << "neg vec" << std:: endl;
 			}
 			
 				std::cout << "enemy is blocking wtf" << std::endl<<std::endl;
-				std::cout << "enemy vel mag " << e_vel_mag << std::endl << std::endl;
-				std::cout << "enemy velocity" << std::endl << e_vel << std::endl << std::endl;
-				std::cout << "quad velocity" << std::endl << vel << std::endl << std::endl;	
-				//if ((e_vel_mag < .2) && (fabs(vel[0]) < 1.8)){
-				//if (e_vel_mag < .5 && dist_quad2balloon_m < 6  ) {
+				//std::cout << "enemy vel mag " << e_vel_mag << std::endl << std::endl;
+				//std::cout << "enemy velocity" << std::endl << e_vel << std::endl << std::endl;
+				//std::cout << "quad velocity" << std::endl << vel << std::endl << std::endl;	
+				/*
 				if (dist_quad2balloon_m < 4  ) {
-					//if ( (fabs(pos_dif[1]/pos_dif_mag)>0.4) || (pos_dif[0] < 0 && vec_quad2balloon[0]<0) || (pos_dif[0] > 0 && vec_quad2balloon[0]>0)) {
 					if ((pos_dif[0] < 0 && vec_quad2balloon[0]<0) || (pos_dif[0] > 0 && vec_quad2balloon[0]>0)) {
 
 						it->role.AttackState.State = it->role.AttackState.BALLOON;
 						balloon_targeted_ = true;
 					}
-				}
+				}*/
 		}
+
+		test[i] = pos_dif[0];
+		i = i+1;
 	}
+
+	//std::cout << test[0] << std::endl;
+	if ( (vec_quad2balloon[0]<0 && test[0]<0 && test[1]<0 && test[2]<0) || (vec_quad2balloon[0]>0 && test[0]>0 && test[1]>0 && test[2]>0)){
+		it->role.AttackState.State = it->role.AttackState.BALLOON;
+		balloon_targeted_ = true;
+	}
+
 	
 
 	// Force leading towards enemy balloon plane
