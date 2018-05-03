@@ -72,7 +72,7 @@ int main(int argc, char** argv){
 					role_struct.PUSHER,
 				 //role_struct.OFFENSIVE_RIGHT,
 			     //role_struct.OFFENSIVE_LEFT,
-				role_struct.OFFENSIVE_RIGHT	};
+				role_struct.OFFENSIVE_LEFT	};
 	} else {
 		roles.resize(quad_names.size());
 	}
