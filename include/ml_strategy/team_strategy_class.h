@@ -13,12 +13,12 @@
 // Offensive states
 class AttackStates{
  public:
-	uint RETURNING = 0;  // Return to team's area
-	uint ADVANCING = 1;  // Going towards opponent's team base
-	uint BALLOON = 2;    // Aiming the balloon
-    //uint STUCKED=3;  //TEST
-
+    uint TAKEOFF = 0;
+	uint RETURNING = 1;  // Return to team's area
+	uint ADVANCING = 2;  // Going towards opponent's team base
+	uint BALLOON = 3;    // Aiming the balloon
     uint BACK=4;//back and attack
+    uint LANDING = 5;
 
 	uint State = ADVANCING;
 };
@@ -26,9 +26,12 @@ class AttackStates{
 //Pusher states
 class PushStates{
  public:
+    uint TAKEOFF = 0;
     uint IMPACTING=1;
     uint FOLLOWING=2;
     uint RETREAT=3;
+    uint LANDING = 4;
+
     uint State=IMPACTING;
     std::string target_name="";
 
@@ -38,11 +41,13 @@ class PushStates{
 // Defensive states
 class DefenseStates{
  public:
-	uint STEADY = 0;  	 // Steady at a given area
-	uint TARGETING = 1;  // Targeting an enemy
-	uint RETURNING = 2;  // Returning home?
-    uint FORWARD=3;
-    uint PUSHING=4;
+    uint TAKEOFF = 0;
+	uint STEADY = 1;  	 // Steady at a given area
+	uint TARGETING = 2;  // Targeting an enemy
+	uint RETURNING = 3;  // Returning home?
+    uint FORWARD=4;
+    uint PUSHING=5;
+    uint LANDING = 6;
 
 	uint State = STEADY;
 	std::string target_name = "";
@@ -189,6 +194,8 @@ class TeamStrategy {
     void UpdateReferences(const double &dt);
     mg_msgs::PVA GetRefRk4(const std::set<QuadData>::iterator &it,
 	                       const double &dt);
+    void Takeoff(const std::set<QuadData>::iterator &it,
+                         const double &dt);
 	void OffensiveReturn(const std::set<QuadData>::iterator &it,
 	                     const double &dt);
     void OffensiveAdvance(const std::set<QuadData>::iterator &it,
@@ -209,6 +216,9 @@ class TeamStrategy {
     void PusherImpacting(const std::set<QuadData>::iterator &it,
                                    const double &dt);
     void PusherRetreating(const std::set<QuadData>::iterator &it,
+                                   const double &dt);
+
+    void Landing(const std::set<QuadData>::iterator &it,
                                    const double &dt);
 
 

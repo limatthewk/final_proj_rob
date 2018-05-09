@@ -69,7 +69,8 @@ int main(int argc, char** argv){
 			     role_struct.OFFENSIVE_CENTRAL};
 	} else if(quad_names.size() == 3) {
 		roles = {role_struct.GOALKEEPER,
-					role_struct.PUSHER,
+					//role_struct.PUSHER,
+			role_struct.GOALKEEPER,
 				 //role_struct.OFFENSIVE_RIGHT,
 			     //role_struct.OFFENSIVE_LEFT,
 				role_struct.OFFENSIVE_LEFT	};
@@ -87,6 +88,7 @@ int main(int argc, char** argv){
 		// Add team quads
 		for (uint i = 0; i < quad_names.size(); i++) {
 			Eigen::Vector3d pos(init_pos[3*i], init_pos[3*i+1], init_pos[3*i+2]);
+			std::cout << pos << std::endl;
 			std::string output_topic = "/" + quad_names[i] + "/px4_control/PVA_Ref";
 			ROS_INFO("[ml_strategy]: Created publisher: %s", output_topic.c_str());
 			globals_.obj_team_strategy.
