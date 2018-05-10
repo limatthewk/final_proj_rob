@@ -96,7 +96,7 @@ int main() {
             };
         database.push_back(obs);
         std::cout << "Estimated Red Position: " << estimatePosition(database).at(red).transpose() << std::endl;
-        std::cout << "Estimated Blue Position: " << estimatePosition(database).at(blue).transpose() << std::endl;
+        //std::cout << "Estimated Blue Position: " << estimatePosition(database).at(blue).transpose() << std::endl;
 
         // Display image
         cv::Mat displayImg = cv::Mat(960, 1280, 3);
