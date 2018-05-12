@@ -226,6 +226,46 @@ Eigen::MatrixXd euler2dcm(Eigen::Vector3d euler){
 
 
 
+Eigen::MatrixXd euler2dcm321(Eigen::Vector3d euler){
+// 3-1-2 rotation
+    float cPhi = cos(euler[0]);
+    float cThe = cos(euler[1]);
+    float cPsi = cos(euler[2]);
+    float sPhi = sin(euler[0]);
+    float sThe = sin(euler[1]);
+    float sPsi = sin(euler[2]);
+
+    Eigen::MatrixXd r_bw(3,3);
+
+    r_bw(0,0) = cThe*cPsi;
+    r_bw(0,1) = cThe*sPsi;
+    r_bw(0,2) = -sThe;
+    r_bw(1,0) = sPhi*sThe*cPsi-cPhi*sPsi;
+    r_bw(1,1) = sPhi*sThe*sPsi+cPhi*cPsi;
+    r_bw(1,2) = sPhi*cThe;
+    r_bw(2,0) = cPhi*sThe*cPsi+sPhi*sPsi;
+    r_bw(2,1) = cPhi*sThe*sPsi-sPhi*cPsi;
+    r_bw(2,2) = cPhi*cThe;
+
+    return r_bw;
+
+
+}
+
+
+
+
+Eigen::Vector3d elAzToUnitEnu(float el,float az){
+    Eigen::Vector3d u;
+    float cEN = cos(el);
+    u(0,0) = cEN*sin(az);
+    u(1,0) = cEN*cos(az);
+    u(2,0) = sin(el);
+
+    return u;
+
+}
+
 
 Eigen::Vector3d ecef2lla(Eigen::Vector3d p_ecef){
     float aa = 6378137;
@@ -247,6 +287,8 @@ Eigen::Vector3d ecef2lla(Eigen::Vector3d p_ecef){
     return p_lla;
 
 }
+
+
 
 
 
@@ -277,17 +319,11 @@ const std::map<Color, Eigen::Vector3d> estimatePosition(const std::vector<Observ
 
     rcB << 0.1159,-0.0004,-0.0435;
     rpB << 0.1013, -0.0004 , 0.0472;
-    /*K << 1691.0, 0, 1914.0,
+    K << 1691.0, 0, 1914.0,
         0, 1697.0, 1074.0,
-        0, 0, 1;*/
+        0, 0, 1;
 
-    K << .004, 0, 0,
-        0, .004, 0,
-        0,0,1;
     RCB_e << 120*M_PI/180, 0, M_PI/2;
-    //RCB_e << 120*M_PI/180, 0, 0;
-    //RCB_e << -M_PI/6, 0, M_PI/2;
-    //RCB_e << 0, M_PI/6, 0;
     RCB = euler2dcm(RCB_e);
 
 
@@ -307,21 +343,28 @@ const std::map<Color, Eigen::Vector3d> estimatePosition(const std::vector<Observ
 
 
         Eigen::Vector3d euler_angles;
-        //euler_angles << 0,M_PI/2-obs.quad_att[0],-obs.quad_att[1];
-        //euler_angles << 0,-obs.quad_att[0],M_PI/2-obs.quad_att[1];
-        euler_angles << M_PI/2-obs.quad_att[0],0,obs.quad_att[1];
+        //euler_angles << M_PI/2-obs.quad_att[0],0,obs.quad_att[1];
+
+        float el = obs.quad_att[0];
+        float az = obs.quad_att[1];
+        float roll = 0;
+
+        euler_angles << 0,el,az - M_PI/2;
+        cout << euler_angles << endl << endl;
+        RBI = euler2dcm321(euler_angles);
+        cout << RBI << endl;
 
         cout << "Attitude: " << obs.quad_att.transpose() << endl << endl;
 
         //cout << "Euler angles: " << euler_angles.transpose() << endl << endl;
-        RBI = euler2dcm(euler_angles);
+        //RBI = euler2dcm321(euler_angles);
 
         //cout << "RBI: " << RBI << endl << endl;
 
         RCI = RCB*RBI;
         //cout << "RCI: " << RCI << endl << endl;
         rI = Renu_ecef*(obs.quad_pos - riG) - RBI.transpose()*rpB;
-        cout << "rI: " << rI.transpose() << endl << endl;
+        //cout << "rI: " << rI.transpose() << endl << endl;
         rcI = rI + RBI.transpose()*rcB;
         //cout << "rcI: " << rcI.transpose() << endl << endl;
         t = -RCI * rcI;
@@ -342,7 +385,7 @@ const std::map<Color, Eigen::Vector3d> estimatePosition(const std::vector<Observ
             if (xctilde(0) != -1 && xctilde(1) != -1){
                 if (q == 0){
                     //cout << "xctilde: " << xctilde.transpose() << endl << endl;
-                    cout << "pc: " << Pc << endl << endl;
+                    //cout << "pc: " << Pc << endl << endl;
                     H_r.row(i_r) = xtilde*Pc.row(2) - Pc.row(0);
                     H_r.row(i_r+1)= ytilde*Pc.row(2) - Pc.row(1);
                     i_r = i_r +2;
@@ -351,7 +394,7 @@ const std::map<Color, Eigen::Vector3d> estimatePosition(const std::vector<Observ
                 
                 else if (q == 1){
                     H_b.row(i_b) = xtilde*Pc.row(2) - Pc.row(0);
-                    H_b.row(i_b+1)= ytilde*Pc.row(2) - Pc.row(0);
+                    H_b.row(i_b+1)= ytilde*Pc.row(2) - Pc.row(1);
                     i_b = i_b +2;
                     N_blue++;
                 }
@@ -393,6 +436,37 @@ const std::map<Color, Eigen::Vector3d> estimatePosition(const std::vector<Observ
            -0.0001,
            -0.0022;
 */
+
+
+////////
+    using namespace Eigen;
+
+    MatrixXd C, V1;
+    Vector3d V2;
+    double V3;
+    C.setRandom(27,18);
+    JacobiSVD<MatrixXd> svd( H_r, ComputeFullU | ComputeFullV);
+
+    cout << svd.matrixV() << endl << endl;
+    cout << svd.matrixV().size() << endl << endl;
+
+    if (svd.matrixV().size()==16){
+        V1 = svd.matrixV().col(3);
+        V2 << V1(0),V1(1),V1(2);
+        V3 = V1(3);
+        //cout << V2 << endl << endl;
+        //cout << V3 << endl << endl;
+        Eigen::MatrixXd r_XrHat2 = V2/V3;
+        cout << r_XrHat2.transpose() << endl << endl;
+
+    }
+
+
+
+////////////
+
+
+
 
     Eigen::MatrixXd r_XrHat = (Hr_r.transpose()*Hr_r).inverse()*Hr_r.transpose()*z_r;
 
