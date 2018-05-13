@@ -310,7 +310,8 @@ void TeamStrategy::UpdatePusher(const std::set<QuadData>::iterator &it) {
          //                       std::set<EnemyData>::iterator *itEnemyClosest);
 
 	//----------
-	const std::string all_names[6] = {"harry", "ron", "hermione", "pegasus","phoenix","gryphon"};
+
+	///////////const std::string all_names[6] = {"harry", "ron", "hermione", "pegasus","phoenix","gryphon"};//REMOVE
 	// Takeoff to desired initial position
 	if(it->role.PushState.State == it->role.PushState.TAKEOFF) {
 		if((it->init_pos - pos).norm() < 0.1) {
@@ -321,6 +322,7 @@ void TeamStrategy::UpdatePusher(const std::set<QuadData>::iterator &it) {
 			ros::service::waitForService(it->set_ready_client.getService());
 			it->set_ready_client.call(ready_msg);
 
+			/*
 			//set everyone as ready
 			//------------------------------------------
 			//REMOVE THIS
@@ -332,7 +334,7 @@ void TeamStrategy::UpdatePusher(const std::set<QuadData>::iterator &it) {
 			//REMOVE THIS
 			this->SetStartGame();
 			//------------------------------------------
-
+			*/
 		}
 	}
 
