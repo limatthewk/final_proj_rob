@@ -77,13 +77,17 @@ const std::vector<BalloonInfo> processImage(const cv::Mat& img) {
 
         double r_area = contourArea(r_cnts[i]);
 
-        if( (r_area > r_max_area) && (r_area > 10000) && (r_radius[i] > radiusThreshold)){
+        if( (r_area > r_max_area) && (r_area > 12000) && (r_radius[i] > radiusThreshold) &&
+            !((r_center[i].x-r_radius[i] < 0) || (r_center[i].x+r_radius[i] > img.cols)   || (r_center[i].y+r_radius[i] > img.rows)
+            || (r_center[i].y-r_radius[i] < 0) )) {
             r_max_area = r_area;
             r_r = r_radius[i];
             r_c = r_center[i];
+
         }
 
 }
+
 
     for( size_t i = 0; i<b_cnts.size();i++ ) {
         minEnclosingCircle( b_cnts[i], b_center[i], b_radius[i] );
@@ -92,7 +96,9 @@ const std::vector<BalloonInfo> processImage(const cv::Mat& img) {
 
 
 
-        if( (b_area > b_max_area) && (b_area > 10000) && (b_radius[i] > radiusThreshold)){
+        if( (b_area > b_max_area) && (b_area > 12000) && (b_radius[i] > radiusThreshold) &&
+            !((b_center[i].x-b_radius[i] < 0) || (b_center[i].x+b_radius[i] > img.cols)   || (b_center[i].y+b_radius[i] > img.rows)
+            || (b_center[i].y-b_radius[i] < 0)) ) {
             b_max_area = b_area;
             b_r = b_radius[i];
             b_c = b_center[i];
@@ -107,7 +113,9 @@ const std::vector<BalloonInfo> processImage(const cv::Mat& img) {
         double b_area = contourArea(b2_cnts[i]);
 
 
-        if( (b_area > b_max_area) && (b_area > 10000) && (b_radius[b_cnts.size()+i] > radiusThreshold)){
+        if( (b_area > b_max_area) && (b_area > 12000) && (b_radius[b_cnts.size()+i] > radiusThreshold) &&
+            !((b_center[b_cnts.size()+i].x-b_radius[b_cnts.size()+i] < 0) || (b_center[b_cnts.size()+i].x+b_radius[b_cnts.size()+i] > img.cols)
+            || (b_center[b_cnts.size()+i].y+b_radius[b_cnts.size()+i] > img.rows) || (b_center[b_cnts.size()+i].y-b_radius[b_cnts.size()+i] < 0)) ) {
             b_max_area = b_area;
             b_r = b_radius[b_cnts.size()+i];
             b_c = b_center[b_cnts.size()+i];
@@ -304,9 +312,7 @@ const std::map<Color, Eigen::Vector3d> estimatePosition(const std::vector<Observ
 
 
     float ps = 2*pow(10,-6); //pixel size
-    //float sigma2c = 20;
     int N = database.size();
-    //std::cout << N << " images" << std::endl << endl;
 
     int q = 0;
 
@@ -327,7 +333,6 @@ const std::map<Color, Eigen::Vector3d> estimatePosition(const std::vector<Observ
         0, 1697.0*ps, 1074.0*ps,
         0, 0, 1*ps;
 
-    //cout << K << endl<< endl;
 
 
     RCB_e << 120*M_PI/180, 0, M_PI/2;
@@ -357,38 +362,19 @@ const std::map<Color, Eigen::Vector3d> estimatePosition(const std::vector<Observ
 
         euler_angles << 0,el,(az-M_PI/2);
 
-        //cout << euler_angles << endl << endl;
         RBI = euler2dcm321(euler_angles);
-        //cout << RBI << endl << endl;
-
-        //cout << "Attitude: " << obs.quad_att.transpose() << endl << endl;
-
-        //cout << "Euler angles: " << euler_angles.transpose() << endl << endl;
-
-        //cout << "RBI: " << RBI << endl << endl;
 
         RCI = RCB*RBI;
-        //cout << "RCI: " << RCI << endl << endl;
         rI = RLG*(obs.quad_pos - riG) - RBI.transpose()*rpB;
-        //cout << "rI: " << rI.transpose() << endl << endl;
 
-/*
-        rpI = rI + RBI.transpose()*rpB;
-        rpG = RLG.transpose() * rpI + riG;
-        rpG = obs.quad_pos;
-        rp = rpG - rrG;
-        rcI = RLG*(rp + rrG - riG) + RBI.transpose()*(rcB - rpB);
-*/
         rcI = rI + RBI.transpose()*rcB;
-        //cout << "rcI: " << rcI.transpose() << endl << endl;
+
         t = -RCI * rcI;
         Eigen::MatrixXd rcit(RCI.rows(), RCI.cols()+t.cols());
         rcit << RCI, t;
-        //cout << "rcit: " << rcit << endl << endl;
-        //cout << "t: " << t << endl << endl;
-        //cout << "K: " << K << endl << endl;
+
         Pc = K*rcit;
-        //cout << "Pc: " << Pc << endl << endl;
+
         int q = 0;
 
 
@@ -402,13 +388,11 @@ const std::map<Color, Eigen::Vector3d> estimatePosition(const std::vector<Observ
 
             if (xctilde(0) != -1 && xctilde(1) != -1){
                 if (q == 0){
-                    //cout << "xctilde: " << xctilde.transpose() << endl << endl;
-                    //cout << "pc: " << Pc << endl << endl;
+
                     H_r.row(i_r) = xtilde*Pc.row(2) - Pc.row(0);
                     H_r.row(i_r+1)= ytilde*Pc.row(2) - Pc.row(1);
                     i_r = i_r +2;
                     N_red++;
-                    //cout << "N Red" << N_red << endl << endl;
                 }
                 
                 else if (q == 1){
@@ -416,7 +400,7 @@ const std::map<Color, Eigen::Vector3d> estimatePosition(const std::vector<Observ
                     H_b.row(i_b+1)= ytilde*Pc.row(2) - Pc.row(1);
                     i_b = i_b +2;
                     N_blue++;
-                    //cout << "N Blue" << N_blue << endl << endl;
+
                 }
             }
 
@@ -440,50 +424,6 @@ const std::map<Color, Eigen::Vector3d> estimatePosition(const std::vector<Observ
 
     z_r = -H_r.col(3);
     z_b = -H_b.col(3);
-
-    //cout << H_r << endl << endl;
-    //cout << Hr_r << endl << endl;
-    //cout << z_r << endl << endl;
-
-/*
-    Eigen::MatrixXd Hr_r(4,3), z_r(4,1);
-
-    Hr_r << -0.0040, 0.0005, -0.0001,
-            0.0001, 0.0009, -0.0044,
-           -0.0040, 0.0005, -0.0001,
-            0.0001, 0.0010, -0.0044;
-
-    z_r << -0.0001,
-           -0.0023,
-           -0.0001,
-           -0.0022;
-*/
-
-
-/////////
-    /*
-    using namespace Eigen;
-
-    MatrixXd C, V1;
-    Vector3d V2;
-    double V3;
-    C.setRandom(27,18);
-    JacobiSVD<MatrixXd> svd( H_r, ComputeFullU | ComputeFullV);
-
-    if (svd.matrixV().size()==16){
-        V1 = svd.matrixV().col(3);
-        V2 << V1(0),V1(1),V1(2);
-        V3 = V1(3);
-        //cout << V2 << endl << endl;
-        //cout << V3 << endl << endl;
-        Eigen::MatrixXd r_XrHat2 = V2/V3;
-        cout << r_XrHat2.transpose() << endl << endl;
-
-    }
-
-
-*/
-////////////
 
 
 
