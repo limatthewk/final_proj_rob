@@ -262,44 +262,41 @@ void TeamStrategy::UpdateAttDefStateMachine() {
 
 void TeamStrategy::UpdatePusher(const std::set<QuadData>::iterator &it) {
 	std::string my_name=it->name;
-	//iterators for my quads and the enemy's
 	std::set<QuadData>::iterator itQuads;
 	std::set<EnemyData>::iterator itEnemyClosest,itEnemyTarget;
-	//std::string enemyName=this->FindClosestUntargetedEnemy(my_name,&itEnemyClosest);
 	Eigen::Vector3d pos = it->quad_state.position;
 	Eigen::Vector3d vel = it->quad_state.velocity;
 
 	std::string enemyName=this->FindClosestEnemy(my_name,&itEnemyClosest);
-	//std::string enemyName=this->FindClosestUntargetedEnemy(my_name,&itEnemyClosest);
-	std::string enemyTarget= this->FindSecondClosestEnemy(my_name,&itEnemyTarget,enemyName);//Possible target
-
+	std::string enemyTarget= this->FindSecondClosestEnemy(my_name,&itEnemyTarget,enemyName);
 	this->FindEnemyIndex(enemyName,&itEnemyClosest);
 	this->FindEnemyIndex(enemyTarget,&itEnemyTarget);
 
-	//------
    	std::set<QuadData>::iterator itDefender;
+
 	for(itDefender = quads_.begin(); itDefender != quads_.end(); ++itDefender)  {
 		if(itDefender->role.State == itDefender->role.GOALKEEPER){
 			break;      			
 		}
-
 	}
 
+	std::vector<std::string> dangerous_quads;
+	std::vector<std::set<EnemyData>::iterator> dangerous_iterator;
+	this->GetDangerousEnemies(&dangerous_quads, &dangerous_iterator);
 
-    if (itEnemyClosest->name==itDefender->role.DefenseState.target_name){
+
+    if ((itEnemyClosest->name==itDefender->role.DefenseState.target_name) && (dangerous_quads.size()>1)){
     	itEnemyClosest=itEnemyTarget;
     	enemyName=enemyTarget;
     }
-    //If my last target was different then change its targeted to false	
-    //itEnemyClosest, enemyName
+
+
     std::set<EnemyData>::iterator oldTarget;
     if (it->role.PushState.target_name!=enemyName){
     	//UNtarget it->target_name
     	this->FindEnemyIndex(it->role.PushState.target_name,&oldTarget);
     	oldTarget->targeted=false;
     }
-
-
 
 	//-------
 	Eigen::Vector3d pos_target = itEnemyClosest->quad_state.position;
@@ -338,13 +335,13 @@ void TeamStrategy::UpdatePusher(const std::set<QuadData>::iterator &it) {
 		}
 	}
 
-
-
 	//Analyze if collision has occured
 	if(it->role.PushState.State == it->role.PushState.IMPACTING) {
 		//if(it->role.PushState.target_name==""){//THE TARGETS SHOULD BE LOCKED, and not changed during iterations of the program
 		//Assign my target
         it->role.PushState.target_name=enemyName;
+        		std::cout<<"my target is "<<enemyName<<std::endl;
+
 	   	//Modify the enemy quads so it is targeted=true if that enemy is not currently targeted
       	//itEnemyClosest
       	//itEnemyTarget
@@ -378,7 +375,7 @@ void TeamStrategy::UpdatePusher(const std::set<QuadData>::iterator &it) {
 	//std::cout<<"non plus ultra"<<std::endl;
 	//untarget the bois
 		//if I  am y= b, then I go back to impacting
-		double radDef=2;
+		double radDef=4;
 		if((pos-team_balloon_).norm()<radDef){
 			it->role.PushState.State = it->role.PushState.IMPACTING;
 		}
@@ -476,7 +473,7 @@ void TeamStrategy::UpdateDefensive(const std::set<QuadData>::iterator &it) {
 	}
 
 	if(it->role.DefenseState.State == it->role.DefenseState.STEADY) {
-					std::cout<<"steady"<<std::endl;
+					//std::cout<<"steady"<<std::endl;
 
 		if(dangerous_quads.size() > 0) {
 			it->role.DefenseState.State = it->role.DefenseState.TARGETING;
@@ -487,14 +484,14 @@ void TeamStrategy::UpdateDefensive(const std::set<QuadData>::iterator &it) {
 
 	// If targeting an enemy, track him until enemy is no longer dangerous
 	if(it->role.DefenseState.State == it->role.DefenseState.TARGETING) {
-		std::set<EnemyData>::iterator itClosest;
+		
 		std::set<EnemyData>::iterator it_target;
-		///////Update with the closest attacker TESTING
+		/*
+		std::set<EnemyData>::iterator itClosest;
 		std::string my_name=it->name;
-		//std::string enemyName=this->FindClosestUntargetedEnemy(my_name,&itEnemyClosest);
 		std::string enemyName=this->FindClosestEnemy(my_name,&itClosest);
-		std::cout<<"my target is "<<enemyName<<std::endl;
 		it->role.DefenseState.target_name=enemyName;
+		*/
 		////
 		FindEnemyIndex(it->role.DefenseState.target_name, &it_target);
 		if (it_target->danger.State == it_target->danger.NEUTRAL) {
@@ -837,14 +834,6 @@ void TeamStrategy::DefensiveTargeting(const std::set<QuadData>::iterator &it,
 
 	Eigen::Vector3d init_pos = it->init_pos;
 	Plane3d defense_plane(init_pos, offensive_direction_);
-
-
-
-
-	
-
-
-
 
 	// Project enemy position onto plane, finding position reference
 	Eigen::Vector3d pos_projection;  // Enemy projection onto plane
