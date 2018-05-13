@@ -100,8 +100,8 @@ int main(int argc, char** argv){
 
 			//Remove this
 			//fOR BLOONS , add shield to harry
-			srv_msg.request.quad_name = "harry";
-			shield_client.call(srv_msg);
+			//srv_msg.request.quad_name = "harry";
+			//shield_client.call(srv_msg);
 
 
 		}
