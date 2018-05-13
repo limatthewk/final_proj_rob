@@ -1,8 +1,9 @@
 
 #include "ml_strategy/globals.h"
+#include "mg_msgs/SetQuadBool.h"
 
-
-
+#include <ros/ros.h>
+#include "std_msgs/Empty.h"
 
 // roscore
 // roslaunch mediation_layer mediationLayer_withDynamics.launch
@@ -19,19 +20,6 @@
 // Global variables--------------------------
 globalVariables globals_;
 mutexClass mutexes_;
-
-void GameStateCallback(const mg_msgs::GameState::ConstPtr& msg) {
-	uint n_quads = msg->GameState.size();
-	pthread_mutex_lock(&mutexes_.m_team_strategy);
-	for (uint i = 0; i < n_quads; i++) {
-		globals_.obj_team_strategy.
-			UpdateQuadOdom(msg->GameState[i].child_frame_id, 
-				           msg->GameState[i]);
-	}
-	pthread_mutex_unlock(&mutexes_.m_team_strategy);
-	// UpdateQuadOdom(const std::string &name, 
- //                                  const nav_msgs::Odometry &odom)
-}
 
 int main(int argc, char** argv){
 	ros::init(argc, argv, "ml_strategy");
@@ -60,6 +48,12 @@ int main(int argc, char** argv){
 	// Initialize strategy class --------------------------------
 	globals_.obj_team_strategy =
 		TeamStrategy(max_vel, max_acc, team_balloon_pos, enemy_balloon_pos);
+
+	//To add and remove shields, setup
+	ros::ServiceClient shield_client = 
+		node.serviceClient<mg_msgs::SetQuadBool>("/mediation_layer/set_quad_shield");
+	mg_msgs::SetQuadBool srv_msg;
+	srv_msg.request.set_bool = 1;
 
 	// Set quad roles based on the number of quads --------------
 	std::vector<uint> roles;
@@ -92,12 +86,86 @@ int main(int argc, char** argv){
 			globals_.obj_team_strategy.
 				AddQuad(quad_names[i], roles[i], pos, init_yaw[i],
 				        output_topic, &node);
+				
+			//Add shields depending on Quad's role
+			if(roles[i]==role_struct.GOALKEEPER){
+				srv_msg.request.quad_name = quad_names[i];
+				shield_client.call(srv_msg);
+			}
+
+			if(roles[i]==role_struct.PUSHER){
+				srv_msg.request.quad_name = quad_names[i];
+				shield_client.call(srv_msg);
+			}
+
+			//Remove this
+			//fOR BLOONS , add shield to harry
+			srv_msg.request.quad_name = "harry";
+			shield_client.call(srv_msg);
+
+
 		}
 	}
 
+	// Callbacks ---------------------------------------------------
   	ros::Subscriber game_state_sub = node.subscribe<mg_msgs::GameState>
-  				("/mediation_layer/Game_State", 10, GameStateCallback);
-  
+  				("/mediation_layer/Game_State", 10, callbacks::GameStateCallback);
+	ros::Subscriber start_game_sub = node.subscribe
+				("/mediation_layer/Start_Game", 10, callbacks::GameStartCallback);
+	ros::Subscriber land_quads_sub = node.subscribe
+				("/mediation_layer/land_quads", 10, callbacks::LandAllQuadsCallback);
+	
+	//Hardcoding enemy ready
+	//Setup  Signal ready for game!
+				/*
+				
+	ros::ServiceClient ready_client=
+		node.serviceClient<mg_msgs::SetQuadBool>("/mediation_layer/set_quad_ready");
+	mg_msgs::SetQuadBool srv_msg_ready;
+	srv_msg_ready.request.set_bool=1;
+
+	srv_msg_ready.request.quad_name="hermione";
+	ready_client.call(srv_msg_ready);
+	srv_msg_ready.request.quad_name="ron";
+	ready_client.call(srv_msg_ready);
+	srv_msg_ready.request.quad_name="harry";
+	ready_client.call(srv_msg_ready);
+		srv_msg_ready.request.quad_name="gryphon";
+	ready_client.call(srv_msg_ready);
+	srv_msg_ready.request.quad_name="phoenix";
+	ready_client.call(srv_msg_ready);
+	srv_msg_ready.request.quad_name="pegasus";
+	ready_client.call(srv_msg_ready);
+	*/
+
+	//--------------------------------------------------------------
+/*
+	//Setup  Signal ready for game!
+	ros::ServiceClient ready_client=
+		node.serviceClient<mg_msgs::SetQuadBool>("/mediation_layer/set_quad_ready");
+	mg_msgs::SetQuadBool srv_msg_ready;
+
+	globals_.obj_team_strategy.quad_names_=quad_names;
+
+	//Checking if we are ready to play(pos ==init_pos  ) and send service message
+	//int ready=globals_.obj_team_strategy.CheckReady(quad_names,globals_.obj_team_strategy.init_pos_game);
+
+	if(globals_.obj_team_strategy.ready2play_==true){
+		//im ready
+
+		for (uint i = 0; i < quad_names.size(); i++) {
+			srv_msg_ready.request.quad_name=quad_names[i];
+			ready_client.call(srv_msg_ready);
+		}
+
+	}
+
+	//srv_msg_ready.request.set_bool=globals_.obj_team_strategy.ready2play_;//asdaaaaa
+	srv_msg_ready.request.set_bool=1;
+	*/
+	//----------------------------------------------------------------------
+				
+
     // Threads -------------------------------------------
   	std::thread h_strategy_thread;
   	const double strategy_rate = 30;
@@ -109,7 +177,6 @@ int main(int argc, char** argv){
 
 	// Kill mutexes
 	mutexes_.destroy();
-
 	return 0;
 
 }

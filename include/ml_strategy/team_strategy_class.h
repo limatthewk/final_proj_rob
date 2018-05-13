@@ -9,6 +9,7 @@
 #include "ml_strategy/rk4.h"
 #include "nav_msgs/Odometry.h"
 #include "mg_msgs/PVA.h"
+#include "mg_msgs/SetQuadBool.h"
 
 // Offensive states
 class AttackStates{
@@ -16,11 +17,14 @@ class AttackStates{
 	uint RETURNING = 0;  // Return to team's area
 	uint ADVANCING = 1;  // Going towards opponent's team base
 	uint BALLOON = 2;    // Aiming the balloon
-    //uint STUCKED=3;  //TEST
+    uint BACK=3;//back and attack
+    uint TAKEOFF=4;
+    uint LANDING=5;
+    uint READY=7;
 
-    uint BACK=4;//back and attack
 
-	uint State = ADVANCING;
+	uint State = TAKEOFF;
+
 };
 
 //Pusher states
@@ -29,7 +33,11 @@ class PushStates{
     uint IMPACTING=1;
     uint FOLLOWING=2;
     uint RETREAT=3;
-    uint State=IMPACTING;
+    uint TAKEOFF=4;
+    uint LANDING=5;
+    uint READY=6;
+
+    uint State = TAKEOFF;
     std::string target_name="";
 
 };
@@ -43,8 +51,14 @@ class DefenseStates{
 	uint RETURNING = 2;  // Returning home?
     uint FORWARD=3;
     uint PUSHING=4;
+    uint TAKEOFF=5;
+    uint LANDING=6;
+    uint READY=7;
+ 
 
-	uint State = STEADY;
+    uint State = TAKEOFF;
+
+
 	std::string target_name = "";
 };
 
@@ -59,14 +73,11 @@ class QuadRole{
 	uint OFFENSIVE_LEFT = 5;
 	uint OFFENSIVE_CENTRAL = 6;
     uint PUSHER=7;
-
-
-
 	uint State = GOALKEEPER;
+
 	AttackStates AttackState;
 	DefenseStates DefenseState;
     PushStates PushState;
-
 };
 
 
@@ -77,7 +88,6 @@ class EnemyDanger{
 	uint NEUTRAL = 0;
 	uint WARNING = 1;
 	uint DANGER = 2;
-
 	uint State = NEUTRAL;
 };
 
@@ -93,16 +103,17 @@ class QuadData {
  public:
     
     std::string last_target_name;
-
     std::string name;                            // Unique name for vehicle
     mutable QuadState quad_state;                // Measured quad states
     mutable QuadRole role;					     // Quad role in the team
-
     mutable mg_msgs::PVA reference;			     // Output reference structure
     mutable Eigen::Vector3d init_pos;			 // Initial pos to return later on (meters)
     mutable rk4 reference_integrator;            // Runge-kutta dynamics integrator
     mutable ros::NodeHandle nh;                  // ROS Nodehandle
     mutable ros::Publisher pub_reference;  		 // Publishes the reference
+    mutable ros::ServiceClient set_ready_client;
+
+    
 
     bool operator<(const QuadData& other) const {
         int compareResult = name.compare(other.name);
@@ -125,6 +136,8 @@ class EnemyData {
 
 class TeamStrategy {
  public:
+    std::vector<std::string> quad_names_;
+
  	std::set<QuadData> quads_;
  	std::set<EnemyData> enemies_;
  	Eigen::Vector3d team_balloon_, enemy_balloon_;
@@ -135,6 +148,14 @@ class TeamStrategy {
     Plane3d enemy_balloon_plane_;  // Used to find distance to balloon plane
     bool balloon_targeted_ = false;
     bool balloon_popped_ = false;
+    ros::Subscriber start_game_sub_;
+
+
+    bool ready2play_=false;
+    bool emergLanding=false;
+    
+
+  // std::vector<double> init_pos_game_ ={-6.0, 0.0, 2.0, -6.0, -1.5, 2.0,-6.0, 1.5, 2.0};
 
  	// Constructors
  	TeamStrategy();
@@ -152,6 +173,11 @@ class TeamStrategy {
 	 		     const double &yaw_ref,
 		         const std::string &output_topic,
 		         ros::NodeHandle *nh);
+
+    //----
+    //int CheckReady (const std::vector<std::string> &quad_names,std::vector<double> init_pos);
+    //-------
+
 	void AddEnemy(const std::string &enemy_name,
 			      const nav_msgs::Odometry &odom);
     void Odom2QuatStates(const nav_msgs::Odometry &odom,
@@ -167,6 +193,8 @@ class TeamStrategy {
     std::string  FindClosestUntargetedEnemy(const std::string &quad_name,
                                 std::set<EnemyData>::iterator *itEnemyClosest);
     void FindClosestEnemytoBalloon(std::set<EnemyData>::iterator *itEnemyClosest);
+        std::string FindSecondClosestEnemy(const std::string &quad_name,
+                       std::set<EnemyData>::iterator *itEnemyClosest,const std::string &closest_quad);
     void PublishReferences();
 
     // Functions to update enemy danger
@@ -210,7 +238,16 @@ class TeamStrategy {
                                    const double &dt);
     void PusherRetreating(const std::set<QuadData>::iterator &it,
                                    const double &dt);
-
+    //Take off functions
+  // void QuadTakeOff(const std::set<QuadData>::iterator &it,
+    //                     const double &dt);
+    void GoUp(const std::set<QuadData>::iterator &it,
+                           const double &dt);
+    
+    void Landing(const std::set<QuadData>::iterator &it,
+                         const double &dt);
+    void SetStartGame();
+    void SetQuadsToLand();
 
 
 };

@@ -39,6 +39,7 @@ add_executable(ml_strategy_underdogs
                src/team_strategy_class.cpp
                src/helper.cpp
                src/threads.cpp
+               src/callbacks.cpp
                src/rk4.cpp)
 target_link_libraries(ml_strategy_underdogs ${catkin_LIBRARIES})
 add_dependencies(ml_strategy_underdogs ${catkin_EXPORTED_TARGETS})

@@ -1,6 +1,7 @@
 #include "ml_strategy/team_strategy_class.h"
 #include <iostream>
 #include <math.h>
+#include <stdlib.h> 
 
 TeamStrategy::TeamStrategy() {
 	n_quads_ = 0;
@@ -71,10 +72,38 @@ void TeamStrategy::AddQuad(const std::string &quad_name,
 		new_quad.reference_integrator = rk4(max_vel_, max_acc_, ref_pos);
 		new_quad.nh = *nh;
 		new_quad.pub_reference = new_quad.nh.advertise<mg_msgs::PVA>(output_topic, 1);
+		new_quad.set_ready_client = 
+        new_quad.nh.serviceClient<mg_msgs::SetQuadBool>("/mediation_layer/set_quad_ready");
+		
 		quads_.insert(new_quad);
 		n_quads_ = n_quads_ + 1;
 	}
+
+
 }
+/*
+int TeamStrategy::CheckReady (const std::vector<std::string> &quad_names,std::vector<double> init_pos){
+	int flag=1;
+	std::set<QuadData>::iterator it;
+
+	for (uint i = 0; i < quad_names.size(); i++) {
+		//Eigen::Vector3d pos(init_pos[3*i], init_pos[3*i+1], init_pos[3*i+2]);
+		//Find current position
+		TeamStrategy::FindQuadIndex(quad_names[i],&it);
+		Eigen::Vector3d posQuad = it->quad_state.position;
+		Eigen::Vector3d velQuad = it->quad_state.velocity;
+		//std::cout<<"posZ"<<(posQuad[2])<<std::endl;
+		double velThr=0.2;
+		if( (posQuad[2]>1.8)&&(posQuad[2]<2.2) &&(flag==1)&&(velQuad.norm()<velThr) ){
+			flag=1;
+		}else if ((posQuad[2]<1.8)||(posQuad[2]>2.2)){	
+			flag=0;
+		}
+				
+	}
+	return flag;
+}
+*/
 
 void TeamStrategy::AddEnemy(const std::string &enemy_name,
 		      				const nav_msgs::Odometry &odom) {
@@ -173,9 +202,6 @@ void TeamStrategy::EnemyDangerUpdate() {
 			it->danger.State = it->danger.NEUTRAL;
 		}
 	}
-
-
-
 }
 
 void TeamStrategy::GetDangerousEnemies(std::vector<std::string> *names,
@@ -208,12 +234,15 @@ void TeamStrategy::GetWarningEnemies(std::vector<std::string> *names,
 
 // Rules to update defensive and offensive state machine
 void TeamStrategy::UpdateAttDefStateMachine() {
+
 	std::set<QuadData>::iterator it;
 ///--------------------------
 	std::set<EnemyData>::iterator itEnemies;
 	itEnemies=enemies_.begin();
 ///--------------------------
+
 	for(it = quads_.begin(); it != quads_.end(); ++it)  {
+
 		// Defensive update
 		if((it->role.State == it->role.GOALKEEPER) ||
 		   (it->role.State == it->role.DEFENSIVE_RIGHT) ||
@@ -235,30 +264,96 @@ void TeamStrategy::UpdatePusher(const std::set<QuadData>::iterator &it) {
 	std::string my_name=it->name;
 	//iterators for my quads and the enemy's
 	std::set<QuadData>::iterator itQuads;
-	std::set<EnemyData>::iterator itEnemyClosest;
+	std::set<EnemyData>::iterator itEnemyClosest,itEnemyTarget;
 	//std::string enemyName=this->FindClosestUntargetedEnemy(my_name,&itEnemyClosest);
+	Eigen::Vector3d pos = it->quad_state.position;
+	Eigen::Vector3d vel = it->quad_state.velocity;
+
 	std::string enemyName=this->FindClosestEnemy(my_name,&itEnemyClosest);
+	//std::string enemyName=this->FindClosestUntargetedEnemy(my_name,&itEnemyClosest);
+	std::string enemyTarget= this->FindSecondClosestEnemy(my_name,&itEnemyTarget,enemyName);//Possible target
+
 	this->FindEnemyIndex(enemyName,&itEnemyClosest);
+	this->FindEnemyIndex(enemyTarget,&itEnemyTarget);
+
+	//------
+   	std::set<QuadData>::iterator itDefender;
+	for(itDefender = quads_.begin(); itDefender != quads_.end(); ++itDefender)  {
+		if(itDefender->role.State == itDefender->role.GOALKEEPER){
+			break;      			
+		}
+
+	}
+
+
+    if (itEnemyClosest->name==itDefender->role.DefenseState.target_name){
+    	itEnemyClosest=itEnemyTarget;
+    	enemyName=enemyTarget;
+    }
+    //If my last target was different then change its targeted to false	
+    //itEnemyClosest, enemyName
+    std::set<EnemyData>::iterator oldTarget;
+    if (it->role.PushState.target_name!=enemyName){
+    	//UNtarget it->target_name
+    	this->FindEnemyIndex(it->role.PushState.target_name,&oldTarget);
+    	oldTarget->targeted=false;
+    }
+
+
+
+	//-------
+	Eigen::Vector3d pos_target = itEnemyClosest->quad_state.position;
+	Eigen::Vector3d vel_target = itEnemyClosest->quad_state.velocity;
+
+	//---------
+	    //std::string  FindClosestUntargetedEnemy(const std::string &quad_name,
+         //                       std::set<EnemyData>::iterator *itEnemyClosest);
+
+	//----------
+	const std::string all_names[6] = {"harry", "ron", "hermione", "pegasus","phoenix","gryphon"};
+	// Takeoff to desired initial position
+	if(it->role.PushState.State == it->role.PushState.TAKEOFF) {
+		if((it->init_pos - pos).norm() < 0.1) {
+			it->role.PushState.State = it->role.PushState.READY;
+			mg_msgs::SetQuadBool ready_msg;
+			ready_msg.request.set_bool = 1;
+			ready_msg.request.quad_name = it->name;
+			ros::service::waitForService(it->set_ready_client.getService());
+			it->set_ready_client.call(ready_msg);
+
+			//set everyone as ready
+			//------------------------------------------
+			//REMOVE THIS
+			for (int ii=0;ii<6;ii++){
+					ready_msg.request.quad_name = all_names[ii];
+					ros::service::waitForService(it->set_ready_client.getService());
+					it->set_ready_client.call(ready_msg);
+			}
+			//REMOVE THIS
+			this->SetStartGame();
+			//------------------------------------------
+
+		}
+	}
+
+
+
 	//Analyze if collision has occured
 	if(it->role.PushState.State == it->role.PushState.IMPACTING) {
 		//if(it->role.PushState.target_name==""){//THE TARGETS SHOULD BE LOCKED, and not changed during iterations of the program
-			//Assign my target
-		  it->role.PushState.target_name=enemyName;
-		   	//Modify the enemy quads so it is targeted=true
-	   		itEnemyClosest->targeted=true;			
+		//Assign my target
+        it->role.PushState.target_name=enemyName;
+	   	//Modify the enemy quads so it is targeted=true if that enemy is not currently targeted
+      	//itEnemyClosest
+      	//itEnemyTarget
+	   	itEnemyClosest->targeted=true;			
+	
 		//}		
 	   	//Analyze if I have collided against my targeted enemy
-	   	std::set<EnemyData>::iterator itClosest;
-	   	this->FindClosestEnemy(my_name,&itClosest);
-		Eigen::Vector3d pos_target = itClosest->quad_state.position;
-		Eigen::Vector3d vel_target = itClosest->quad_state.velocity;
-		Eigen::Vector3d pos = it->quad_state.position;
-		Eigen::Vector3d vel = it->quad_state.velocity;
 		double dist_quad_enemy=(pos-pos_target).norm();
 		double dThreshold=0.1;
 		double vThreshold=0.2;
-		double radRetreat=3;
-
+		double radRetreat=5;
 		Eigen::Vector3d unitVel=vel.normalized();
 		Eigen::Vector3d unitTeamBalloon=team_balloon_.normalized();
 
@@ -281,13 +376,28 @@ void TeamStrategy::UpdatePusher(const std::set<QuadData>::iterator &it) {
 	//std::cout<<"non plus ultra"<<std::endl;
 	//untarget the bois
 		//if I  am y= b, then I go back to impacting
-		Eigen::Vector3d pos = it->quad_state.position;
 		double radDef=2;
 		if((pos-team_balloon_).norm()<radDef){
 			it->role.PushState.State = it->role.PushState.IMPACTING;
 		}
 
+		double eneToBalloon,pusherToBalloon;
+		eneToBalloon=(pos_target-team_balloon_).norm();	
+		pusherToBalloon=(pos-team_balloon_).norm();
+		double rebounceDistance=3.0;
 
+	}
+
+		// Takeoff to desired initial position
+	if(it->role.PushState.State == it->role.PushState.TAKEOFF) {
+		Eigen::Vector3d pos = it->quad_state.position;
+		if((it->init_pos - pos).norm() < 0.1) {
+			it->role.PushState.State = it->role.PushState.READY;
+			mg_msgs::SetQuadBool ready_msg;
+			ready_msg.request.set_bool = 1;
+			ready_msg.request.quad_name = it->name;
+			it->set_ready_client.call(ready_msg);
+		}
 	}
 
 }
@@ -295,9 +405,19 @@ void TeamStrategy::UpdatePusher(const std::set<QuadData>::iterator &it) {
 void TeamStrategy::UpdateOffensive(const std::set<QuadData>::iterator &it,
 									const std::set<EnemyData>::iterator &itEnemies) {
 
-	// This strategy makes a quad go back home
-	if(it->role.AttackState.State == it->role.AttackState.RETURNING) {
-		// Can't get out of this state
+
+	// Takeoff to desired initial position
+	if(it->role.AttackState.State == it->role.AttackState.TAKEOFF) {
+		Eigen::Vector3d pos = it->quad_state.position;
+		if((it->init_pos - pos).norm() < 0.1) {
+
+			it->role.AttackState.State = it->role.AttackState.READY;
+			mg_msgs::SetQuadBool ready_msg;
+			ready_msg.request.set_bool = 1;
+			ready_msg.request.quad_name = it->name;
+			ros::service::waitForService(it->set_ready_client.getService());
+			it->set_ready_client.call(ready_msg);
+		}
 	}
 
  
@@ -336,9 +456,26 @@ void TeamStrategy::UpdateDefensive(const std::set<QuadData>::iterator &it) {
 	std::vector<std::string> dangerous_quads;
 	std::vector<std::set<EnemyData>::iterator> dangerous_iterator;
 	this->GetDangerousEnemies(&dangerous_quads, &dangerous_iterator);
-	// Keep quad steady at its initial position until a dangerous
-	// enemy is seen
+
+	//Takeoff to desired initial position
+
+	// Takeoff to desired initial position
+	if(it->role.DefenseState.State == it->role.DefenseState.TAKEOFF) {
+		Eigen::Vector3d pos = it->quad_state.position;
+		if((it->init_pos - pos).norm() < 0.1) {
+
+			it->role.DefenseState.State = it->role.DefenseState.READY;
+			mg_msgs::SetQuadBool ready_msg;
+			ready_msg.request.set_bool = 1;
+			ready_msg.request.quad_name = it->name;
+			ros::service::waitForService(it->set_ready_client.getService());
+			it->set_ready_client.call(ready_msg);
+		}
+	}
+
 	if(it->role.DefenseState.State == it->role.DefenseState.STEADY) {
+					std::cout<<"steady"<<std::endl;
+
 		if(dangerous_quads.size() > 0) {
 			it->role.DefenseState.State = it->role.DefenseState.TARGETING;
 			it->role.DefenseState.target_name = dangerous_quads[0];
@@ -354,6 +491,7 @@ void TeamStrategy::UpdateDefensive(const std::set<QuadData>::iterator &it) {
 		std::string my_name=it->name;
 		//std::string enemyName=this->FindClosestUntargetedEnemy(my_name,&itEnemyClosest);
 		std::string enemyName=this->FindClosestEnemy(my_name,&itClosest);
+		std::cout<<"my target is "<<enemyName<<std::endl;
 		it->role.DefenseState.target_name=enemyName;
 		////
 		FindEnemyIndex(it->role.DefenseState.target_name, &it_target);
@@ -399,15 +537,17 @@ void TeamStrategy::UpdateReferences(const double &dt) {
 			else if(it->role.DefenseState.State == it->role.DefenseState.PUSHING) {
 				this->PusherImpacting(it, dt);
 			}
-			//	this->PusherImpacting();
-			//-----------------
-		
+			/*
+			std::cout<<"my pos"<<it->quad_state.position<<std::endl;
+			std::cout<<"init pos"<<it->init_pos<<std::endl;
+			std::cout<<"------------"<<std::endl;
+			*/
 		} else if((it->role.State == it->role.OFFENSIVE_RIGHT) ||
 				  (it->role.State == it->role.OFFENSIVE_LEFT) ||
 				  (it->role.State == it->role.OFFENSIVE_CENTRAL)) {
 			if(it->role.AttackState.State == it->role.AttackState.RETURNING) {
 				this->OffensiveReturn(it, dt);
-			} else if(it->role.AttackState.State == it->role.AttackState.ADVANCING) {
+			}else if(it->role.AttackState.State == it->role.AttackState.ADVANCING) {
 				this->OffensiveAdvance(it, dt);
 			} else if(it->role.AttackState.State == it->role.AttackState.BALLOON) {
 				this->OffensiveBalloon(it, dt);
@@ -420,6 +560,9 @@ void TeamStrategy::UpdateReferences(const double &dt) {
 				this->PusherImpacting(it,dt);
 			}else if(it->role.PushState.State ==it->role.PushState.RETREAT) {
 				this->PusherRetreating(it,dt);
+				//std::cout<<"im retreating!"<<std::endl;
+				//std::cout<<"my velx is"<< it->quad_state.velocity.normalized()<<std::endl;
+
 				
 			}
 
@@ -481,11 +624,6 @@ void TeamStrategy::OffensiveAdvance(const std::set<QuadData>::iterator &it,
 	// Find nearest point in balloon plane
 	Eigen::Vector3d pos = it->quad_state.position;
 	Eigen::Vector3d vel = it->quad_state.velocity;
-    
-    Eigen::Vector3d nearest_point;		
-
-	// Vector from quad to enemy balloon plane
-	//Eigen::Vector3d vec;
 
 	//vec << 0,0,0;
 	// 0,0,- is up
@@ -498,12 +636,15 @@ void TeamStrategy::OffensiveAdvance(const std::set<QuadData>::iterator &it,
 
 	Eigen::Vector3d vec_quad2balloon =(enemy_balloon_ - pos).normalized();
 	Eigen::Vector3d dist_quad2balloon =enemy_balloon_ - pos;
-	//std::cout << vec_quad2balloon << std::endl;
-	//std::cout << std::abs(dist_quad2balloon[0]) << std::endl;
+	float dist_quad2balloon_m = sqrt(pow(dist_quad2balloon[0],2.0)+pow(dist_quad2balloon[1],2.0)+pow(dist_quad2balloon[2],2.0));
 
 	Eigen::Vector3d vec;
 	vec << 0,0,0;
 
+	float test[3] = {};
+	int i = 0;
+
+	
 	std::set<EnemyData>::iterator it2;
 	for(it2 = enemies_.begin(); it2 != enemies_.end(); ++it2) {
 		Eigen::Vector3d e_pos = it2->quad_state.position;
@@ -511,43 +652,45 @@ void TeamStrategy::OffensiveAdvance(const std::set<QuadData>::iterator &it,
 
 		// Vector from quad to team balloon
 		Eigen::Vector3d vec_quad2enemy = pos - e_pos;
-		Eigen::Vector3d test = vec_quad2enemy.normalized()-vec_quad2balloon;
-		//std::cout << vec_quad2enemy << std::endl<<std::endl;
 		
 		float dist_quad2enemy = sqrt(pow(vec_quad2enemy[0],2.0)+pow(vec_quad2enemy[1],2.0)+pow(vec_quad2enemy[2],2.0));
 		float e_vel_mag = sqrt(pow(e_vel[0],2.0)+pow(e_vel[1],2.0)+pow(e_vel[2],2.0));
-		float vel_mag = sqrt(pow(vel[0],2.0)+pow(vel[1],2.0)+pow(vel[2],2.0));
 
-		//if (e_vel_mag < 1.5 && vel_mag > 1.5 && dist_quad2enemy < 6){
-		if (e_vel_mag < 1.5 && dist_quad2enemy < 6){
-			if(it->role.State == it->role.OFFENSIVE_LEFT){
-				vec << 0,15,0;
-			}
-			else if(it->role.State == it->role.OFFENSIVE_RIGHT){
-				vec << 0,-15,0;
-			}
-				std::cout << "enemy is blocking" << std::endl<<std::endl;
-				std::cout << "enemy vel mag " << e_vel_mag << std::endl << std::endl;
-				std::cout << "enemy velocity" << std::endl << e_vel << std::endl << std::endl;
-				std::cout << "quad velocity" << std::endl << vel << std::endl << std::endl;	
-				if ((e_vel_mag < .2) && (fabs(vel[0]) < 1.8)){
+		Eigen::Vector3d pos_dif = pos - e_pos;
 
-					it->role.AttackState.State = it->role.AttackState.BALLOON;
-					balloon_targeted_ = true;
-				}
+		if (dist_quad2enemy < 2.5){
+
+			if (vel[1] > e_vel[1]){
+				vec << 0,5,0;
+			
+			}
+			if (vel[1] < e_vel[1]){
+				vec << 0,-5,0;
+			}
+			
+				//std::cout << "enemy is blocking wtf" << std::endl<<std::endl;
 		}
+
+		test[i] = pos_dif[0];
+		i = i+1;
 	}
+
+	//std::cout << test[0] << std::endl;
+	if ( (vec_quad2balloon[0]<0 && test[0]<0 && test[1]<0 && test[2]<0) || (vec_quad2balloon[0]>0 && test[0]>0 && test[1]>0 && test[2]>0)){
+		it->role.AttackState.State = it->role.AttackState.BALLOON;
+		balloon_targeted_ = true;
+	}
+
+	
+
 	// Force leading towards enemy balloon plane
 	Eigen::Vector3d ref_vel = max_vel_*((enemy_balloon_ - pos).normalized());
 	Eigen::Vector3d ref_acc = kd*(ref_vel - vel)+vec;
 
-	// Set position reference as current, update rk4 based on
-	// velocity error
-	it->reference_integrator.SetPos(pos);
-	//std::cout << ref_acc+vec << std::endl << std::endl;
+	// Set position reference as current, update rk4 based on velocity error
 	it->reference_integrator.UpdateStates(ref_acc, dt);
 
-	it->reference = this->GetRefRk4(it, dt);
+it->reference = this->GetRefRk4(it, dt);
 }
 
 
@@ -557,7 +700,7 @@ void TeamStrategy::OffensiveAdvance(const std::set<QuadData>::iterator &it,
 void TeamStrategy::OffensiveBalloon(const std::set<QuadData>::iterator &it,
 	                                const double &dt) {
 	double kd = 2.0, kp = 3.0;
-	std::cout << "attacking balloon" << std:: endl;
+//	std::cout << "attacking balloon" << std:: endl;
 	// Get position
 	Eigen::Vector3d pos = it->quad_state.position;
 	
@@ -604,8 +747,62 @@ void TeamStrategy::DefensiveForward(const std::set<QuadData>::iterator &it,
 
 
 
-    }
+ }
 
+//////////////////////
+ /*
+void TeamStrategy::QuadTakeOff(const std::set<QuadData>::iterator &it,
+                         const double &dt){
+	//init_pos_game
+
+	//iterate through all the quads
+		//got to pos
+
+
+	double kd = 5.0, kp1 = 2.0;
+	uint i = 0; 
+	// Get current position/velocity of vehicle
+	Eigen::Vector3d pos = it->quad_state.position;
+	Eigen::Vector3d vel = it->quad_state.velocity;
+	std::set<QuadData>::iterator itQuad;
+
+	for(itQuad = quads_.begin(); itQuad != quads_.end(); ++itQuad) {
+
+		pos=itQuad->quad_state.position;
+		vel=itQuad->quad_state.velocity;
+		Eigen::Vector3d pos_target(init_pos_game_[3*i], init_pos_game_[3*i+1], init_pos_game_[3*i+2]);
+		
+		// Define plane with normal towards enemy base, and origin at defense line
+		Eigen::Vector3d init_pos = it->init_pos;
+		Plane3d defense_plane(init_pos, offensive_direction_);
+		// Project enemy position onto plane, finding position reference
+		Eigen::Vector3d pos_projection;  // Enemy projection onto plane
+		double dist;					 // Enemy distance to plane
+		defense_plane.ProjectPointOntoPlane(pos_target, &pos_projection, &dist);
+		// Project enemy velocity onto plane
+		Eigen::Vector3d vel_projection;
+		//defense_plane.ProjectVectorOntoPlane(0, &vel_projection);
+		// Reference position: plane "advance_dist" ahead of defense line
+		const double advance_dist = 1.0;
+		//Eigen::Vector3d ref_pos = pos_projection + advance_dist*offensive_direction_;
+		Eigen::Vector3d ref_pos = advance_dist*offensive_direction_;
+		// Reference velocity is sum of two terms:
+		// 1) enemy projection onto defense plane
+		// 2) enemy velocity projected onto plane
+		Eigen::Vector3d ref_vel_pos = kp1*(ref_pos - pos);
+		Eigen::Vector3d ref_vel = ref_vel_pos + vel_projection;
+		Eigen::Vector3d ref_acc = kd*(ref_vel - vel);
+		// Set position reference as current, update rk4 based on
+		// velocity only
+		it->reference_integrator.SetPos(ref_pos);
+		it->reference_integrator.UpdateStates(ref_acc, dt);
+
+
+		it->reference = this->GetRefRk4(it, dt);
+		i=i+1;
+	}
+}    
+*/
 void TeamStrategy::DefensiveSteady(const std::set<QuadData>::iterator &it,
 	                               const double &dt) {
 	Eigen::Vector3d ref_pos = it->init_pos;
@@ -631,8 +828,21 @@ void TeamStrategy::DefensiveTargeting(const std::set<QuadData>::iterator &it,
 	Eigen::Vector3d vel_target = it_target->quad_state.velocity;
 
 	// Define plane with normal towards enemy base, and origin at defense line
+
+	//Define plane with normal paralellel to the vector from our quad to the target
+	// and origin at defense line
+
+
 	Eigen::Vector3d init_pos = it->init_pos;
 	Plane3d defense_plane(init_pos, offensive_direction_);
+
+
+
+
+	
+
+
+
 
 	// Project enemy position onto plane, finding position reference
 	Eigen::Vector3d pos_projection;  // Enemy projection onto plane
@@ -659,7 +869,7 @@ void TeamStrategy::DefensiveTargeting(const std::set<QuadData>::iterator &it,
 	it->reference_integrator.SetPos(ref_pos);
 	it->reference_integrator.UpdateStates(ref_acc, dt);
 
-	it->reference = this->GetRefRk4(it, dt);
+it->reference = this->GetRefRk4(it, dt);
 }
 
 void TeamStrategy::DefensiveReturn(const std::set<QuadData>::iterator &it,
@@ -721,14 +931,52 @@ void TeamStrategy::PusherRetreating(const std::set<QuadData>::iterator &it,
 	Eigen::Vector3d vel = it->quad_state.velocity;
 
 	//Getting MY TARGETED ENEMY information
+	std::set<EnemyData>::iterator itEnemyClosest;
 	std::string enemyName=it->role.PushState.target_name;
+	this->FindEnemyIndex(enemyName,&itEnemyClosest);
+	Eigen::Vector3d pos_enemy = itEnemyClosest->quad_state.position;
+	Eigen::Vector3d vel_enemy = itEnemyClosest->quad_state.velocity;
 
-    Eigen::Vector3d offset_offensive = Eigen::Vector3d( 5.0, 0.0, 0.0);
-	Eigen::Vector3d pos_target =team_balloon_+offset_offensive;
+	//Trying new safe point
+	double distEnemySP=8;
+	Eigen::Vector3d safePoint;
+	Eigen::Vector3d offset_offensive = Eigen::Vector3d( 5.0, 0.0, 0.0);
+/*
+	//double target_direction = vel_enemy.normalized().dot(offensive_direction_);
+	int target_direction = vel_enemy(1)*defensive_direction_(0);
+	////std::cout<<"target direction "<<target_direction<<std::endl;
+	if (target_direction<0 )//means enemy is going towards our base
+	{
+		safePoint = vel_enemy.normalized()*distEnemySP+pos_enemy;
+		///////std::cout<<"go to preditction"<<std::endl;
+	}else{
+
+		safePoint =team_balloon_-1.0*defensive_direction_;
+		//safePoint = vel.normalized()*distEnemySP+team_balloon_;
+	}
+
+		safePoint =team_balloon_+1.0*defensive_direction_;
+*/
+
+	Eigen::Vector3d unitTeamBalloon=team_balloon_.normalized();
+	Eigen::Vector3d vel_direction=vel.normalized();
+	Eigen::Vector3d ene_direction=vel_enemy.normalized();
+
+	safePoint =team_balloon_+offensive_direction_*3;
+	/*
+	if(((vel_direction(0)>0)&&(unitTeamBalloon(0)<0))||((vel_direction(0)<0)&&(unitTeamBalloon(0)>0))) {
+		vel_direction(0)=-vel_direction(0);
+		vel_direction(1)=-vel_direction(1);
+		safePoint = vel.normalized()*distEnemySP+team_balloon_;
+		std::cout<<"wrong way"<<std::endl;
+	}
+		*/	//safePoint = vel.normalized()*distEnemySP+team_balloon_;
+
+	
 
 
     // Vector from quad to its targeted enemy
-	Eigen::Vector3d vec_quad2enemy_pos = (pos_target - pos);
+	Eigen::Vector3d vec_quad2enemy_pos = (safePoint - pos);
 	Eigen::Vector3d ref_vel = max_vel_*vec_quad2enemy_pos.normalized();
 	Eigen::Vector3d ref_acc = kd*(ref_vel - vel);
 	it->reference_integrator.SetPos(pos);
@@ -765,6 +1013,38 @@ std::string TeamStrategy::FindClosestEnemy(const std::string &quad_name,
 	return enemy_name;
 
 }
+
+
+std::string TeamStrategy::FindSecondClosestEnemy(const std::string &quad_name,
+					 std::set<EnemyData>::iterator *itEnemyClosest,const std::string &closest_quad){
+	//This function receives our quad name and "returns"
+	//a pointer to the enemy closest quad
+	std::set<QuadData>::iterator it;
+	std::string enemy_name;
+	this->FindQuadIndex(quad_name,&it);
+
+	Eigen::Vector3d pos = it->quad_state.position;
+    //comparison variables
+	double distMin=300;
+	//find closest enemy
+	std::set<EnemyData>::iterator itEnemy;
+	for(itEnemy = enemies_.begin(); itEnemy != enemies_.end(); ++itEnemy) {
+
+		if (itEnemy->name==closest_quad){
+
+		}else  if( ((itEnemy->quad_state.position-pos).norm())<distMin ) {
+			distMin=(itEnemy->quad_state.position-pos).norm();
+			enemy_name=itEnemy->name;
+		}
+	}
+	EnemyData enemy_with_name;
+	enemy_with_name.name=enemy_name;
+	*itEnemyClosest=enemies_.find(enemy_with_name);
+	return enemy_name;
+
+}
+
+
 
 std::string TeamStrategy::FindClosestUntargetedEnemy(const std::string &quad_name,
 					 			std::set<EnemyData>::iterator *itEnemyClosest){//returns enemy name
@@ -809,4 +1089,83 @@ void TeamStrategy::FindClosestEnemytoBalloon(std::set<EnemyData>::iterator *itEn
 	EnemyData enemy_with_name;
 	enemy_with_name.name=enemy_name;
 	*itEnemyClosest=enemies_.find(enemy_with_name);
+}
+
+void TeamStrategy::GoUp(const std::set<QuadData>::iterator &it, const double &dt){
+
+	double kd = 0.5, kp1 = 1.0;
+
+	// Get position and velocity
+	Eigen::Vector3d pos = it->quad_state.position;
+	Eigen::Vector3d vel = it->quad_state.velocity;
+
+	//Position of target
+	Eigen::Vector3d pos_target = Eigen::Vector3d(pos(0), pos(1), 2.0);
+	Eigen::Vector3d vel_target = Eigen::Vector3d( 0.0, 0.0, 0.0);
+
+
+
+	Eigen::Vector3d ref_vel_pos = kp1*(pos_target - pos);
+	Eigen::Vector3d ref_acc = kd*(ref_vel_pos - vel);
+
+	// Set position reference as current, update rk4 based on
+	// velocity only
+	it->reference_integrator.SetPos(pos_target);
+	it->reference_integrator.UpdateStates(ref_acc, dt);
+
+	it->reference = this->GetRefRk4(it, dt);
+}
+
+void TeamStrategy::Landing(const std::set<QuadData>::iterator &it,
+                           const double &dt) {
+	double kd = 2.0, kp = 3.0;
+	double max_land_vel = 0.5;
+
+	// Get current position/velocity of vehicle
+	Eigen::Vector3d pos = it->quad_state.position;
+	Eigen::Vector3d vel = it->quad_state.velocity;
+    
+    // Vector from quad to its initial position
+    Eigen::Vector3d land_pos(pos[0], pos[1], 0.0);
+	Eigen::Vector3d vec_quad2ground = land_pos - pos;
+	
+	// Force leading towards initial position
+	if (vec_quad2ground.norm() > max_acc_/kp) {
+		Eigen::Vector3d ref_vel = max_land_vel*vec_quad2ground.normalized();
+		Eigen::Vector3d ref_acc = kd*(ref_vel - vel);
+		it->reference_integrator.SetPos(pos);
+		it->reference_integrator.UpdateStates(ref_acc, dt);
+	} else {
+		Eigen::Vector3d ref_pos = land_pos;
+		it->reference_integrator.ResetStates(ref_pos);
+	}
+
+	it->reference = this->GetRefRk4(it, dt);
+}
+
+void TeamStrategy::SetStartGame() {
+	std::set<QuadData>::iterator it;
+	for(it = quads_.begin(); it != quads_.end(); ++it)  {
+		// Defensive update
+		if((it->role.State == it->role.GOALKEEPER) ||
+		   (it->role.State == it->role.DEFENSIVE_RIGHT) ||
+		   (it->role.State == it->role.DEFENSIVE_LEFT) ||
+		   (it->role.State == it->role.DEFENSIVE_CENTRAL)) {
+			it->role.DefenseState.State = it->role.DefenseState.STEADY;
+		} else if((it->role.State == it->role.OFFENSIVE_RIGHT) ||
+				  (it->role.State == it->role.OFFENSIVE_LEFT) ||
+				  (it->role.State == it->role.OFFENSIVE_CENTRAL)) {
+			it->role.AttackState.State = it->role.AttackState.ADVANCING;
+		}else if(it->role.State == it->role.PUSHER) {
+			it->role.PushState.State = it->role.PushState.IMPACTING;
+		}
+	}
+}
+
+void TeamStrategy::SetQuadsToLand() {
+	std::set<QuadData>::iterator it;
+	for(it = quads_.begin(); it != quads_.end(); ++it)  {
+		it->role.DefenseState.State = it->role.DefenseState.LANDING;
+		it->role.AttackState.State = it->role.AttackState.LANDING;
+	}
 }
