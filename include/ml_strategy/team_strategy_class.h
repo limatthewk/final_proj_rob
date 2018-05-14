@@ -201,6 +201,8 @@ class TeamStrategy {
     void EnemyDangerUpdate();
     void GetDangerousEnemies(std::vector<std::string> *names,
                              std::vector<std::set<EnemyData>::iterator> *iterators);
+    void GetAllDangerousEnemies(std::vector<std::string> *names,
+                             std::vector<std::set<EnemyData>::iterator> *iterators);
     void GetWarningEnemies(std::vector<std::string> *names,
                         std::vector<std::set<EnemyData>::iterator> *iterators);
 

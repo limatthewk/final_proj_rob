@@ -97,6 +97,7 @@ int main(int argc, char** argv){
 				srv_msg.request.quad_name = quad_names[i];
 				shield_client.call(srv_msg);
 			}
+		
 
 			//Remove this
 			//fOR BLOONS , add shield to harry
