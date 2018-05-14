@@ -43,12 +43,24 @@ int main(int argc, char** argv){
 	node.getParam("TeamBalloon", team_balloon);
 	node.getParam("EnemyBalloon", enemy_balloon);
 		
-	Eigen::Vector3d team_balloon_pos(team_balloon[0], team_balloon[1], team_balloon[2]);
-	Eigen::Vector3d enemy_balloon_pos(enemy_balloon[0], enemy_balloon[1], enemy_balloon[2]);
+	//Eigen::Vector3d team_balloon_pos(team_balloon[0], team_balloon[1], team_balloon[2]);
+	//Eigen::Vector3d enemy_balloon_pos(enemy_balloon[0], enemy_balloon[1], enemy_balloon[2]);
 	
+Eigen::Vector3d team_balloon_pos;
+Eigen::Vector3d enemy_balloon_pos;
+	if (init_pos[0]<0){
+		//we are red
+		enemy_balloon_pos <<6.15297,-0.789981 ,2.16978;
+		 team_balloon_pos<<-7.27838,0.714218,1.29838;
+
+	}else{
+				team_balloon_pos<<6.15297,-0.789981 ,2.16978;
+		 enemy_balloon_pos<<-7.27838,0.714218,1.29838;
 
 
-	//Using estimation from data set, assuming we are on the red team
+
+	}
+	//Using estimation from data set,2 assuming we are on the red team
 	/*
 	Estimated Red Position: 6.15297 -0.789981 2.16978
 	Estimated Blue Position: -7.27838 0.714218 1.29838
